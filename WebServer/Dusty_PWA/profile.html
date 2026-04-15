@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Profile - Gamify</title>
+    <link rel="icon" href="{{ url_for('static', filename='images/mainicon.png') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/profilestyle.css') }}">
+  </head>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/static/sw.js')
+        .then(() => console.log('SW registered'))
+        .catch(err => console.error('SW failed', err));
+    }
+  </script>
+  <body>
+    <header class="topbar" role="banner">
+      <a href="{{ url_for('home') }}"><div class="brand"><img src="{{ url_for('static', filename='images/GAMIFY_LOGO.png') }}" alt="Gamify logo" width="150px"></div></a>
+      <nav class="nav" role="navigation" aria-label="Auth pages">
+        <a class="btn btn-ghost" href="{{ url_for('login') }}">Sign In</a>
+        <a class="btn btn-ghost" href="{{ url_for('signup') }}">Sign Up</a>
+        <a class="btn btn-primary" href="{{ url_for('home') }}">Home</a>
+      </nav>
+    </header>
+
+    <main class="wrap" role="main" aria-labelledby="profileTitle">
+      <div class="glow" aria-hidden="true"></div>
+
+      <section class="card" id="profileCard" aria-labelledby="profileTitle">
+        <!-- Avatar Section -->
+        <div class="avatar-wrap" aria-hidden="true">
+          <img id="profileAvatar" src="{{ user.userPfp }}" alt="Avatar">
+        </div>
+
+        <div class="hero" id="profileContent">
+          <div class="hero-row">
+            <div class="username" aria-live="polite">
+              <h1 id="displayName" style="text-align: left;">{{ user.userName }}</h1>
+              <p id="displayEmail">{{ user.userEmail }}</p>
+            </div>
+          </div>
+
+            <!-- Bio Editor -->
+          <div class="line" style="flex-direction:column;align-items:flex-start;gap:8px;">
+            <div class="label" style="margin: 40px 0px 0px 0px; font-size:22px; letter-spacing:0.2px;">Bio - A little bit about yourself</div>
+            <textarea id="bioEditor" class="bio-editor" placeholder="Write a short bio..." style="resize: none; margin: 10px 0px">{{ user.userBio }}</textarea>
+            <div style="display:flex;gap:8px;margin-top:6px;">
+              <button id="saveBio" class="btn btn-primary">Save bio</button>
+              <button id="resetBio" class="btn btn-ghost">Reset</button>
+              <div id="bioStatus" style="margin-left:8px;color:var(--muted);align-self:center;font-size:13px"></div>
+            </div>
+          </div>
+        </div>
+
+        <form id="avatarForm" style="display: block; width: 80%; margin: auto; text-align: center; background: rgba(255, 255, 255, 0.02); border-radius: 12px; padding: 18px;" action="/upload-avatar" method="POST" enctype="multipart/form-data">
+          <label for="avatarUpload" style="margin: 40px 0px 0px 0px; font-size:22px; letter-spacing:0.2px;">Change Profile Picture:</label>
+          <input type="file" id="avatarUpload" style="display: block; padding: 30px; text-align: center; margin: auto;" name="avatar" accept="image/*">
+          <button type="submit" class="btn btn-primary">Upload</button>
+        </form>
+
+        <div class="actions">
+          <a id="editBtn" class="btn btn-ghost" href="#" role="button">Edit profile</a>
+          <button id="logoutBtn" class="btn btn-primary">Sign out</button>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      // load demo data (fallback)
+      const mock = JSON.parse(localStorage.getItem('gamify_user') || '{}');
+
+      const bioEditor = document.getElementById('bioEditor');
+      const bioStatus = document.getElementById('bioStatus');
+
+      // try to fetch bio from service worker cache (/user/bio). fallback to localStorage/mock.
+      async function loadBio() {
+        try {
+          const res = await fetch('/user/bio', { cache: 'no-store' });
+          if (res && res.ok) {
+            const json = await res.json();
+            bioEditor.value = json.bio || (mock.bio || '');
+            return;
+          }
+        } catch (err) {
+          // ignored: fallback below
+        }
+        bioEditor.value = mock.bio || '';
+      }
+
+      // save bio: update localStorage and POST to /save-bio (service worker will intercept and cache)
+      async function saveBio() {
+        const bio = bioEditor.value || '';
+        bioStatus.textContent = 'Saving...';
+        // update local preview/storage immediately
+        const user = Object.assign({}, mock, { bio });
+        localStorage.setItem('gamify_user', JSON.stringify(user));
+        // send to sw / server
+        try {
+          const res = await fetch('/save-bio', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ bio })
+          });
+          if (res && res.ok) {
+            bioStatus.textContent = 'Saved';
+            setTimeout(()=> bioStatus.textContent = '', 2000);
+            return;
+          }
+        } catch (err) {
+          // network or no SW
+        }
+        bioStatus.textContent = 'Saved locally';
+        setTimeout(()=> bioStatus.textContent = '', 2000);
+      }
+
+      document.getElementById('saveBio').addEventListener('click', (e) => {
+        e.preventDefault();
+        saveBio();
+      });
+
+      document.getElementById('resetBio').addEventListener('click', (e) => {
+        e.preventDefault();
+        bioEditor.value = mock.bio || '';
+        bioStatus.textContent = 'Reset';
+        setTimeout(()=> bioStatus.textContent = '', 1400);
+      });
+
+      document.getElementById('logoutBtn').addEventListener('click', () => {
+        localStorage.removeItem('gamify_user');
+        location.href = "{{ url_for('login') }}";
+      });
+
+      document.getElementById('editBtn').addEventListener('click', (e) => { e.preventDefault(); alert('Open edit profile UI (implement).'); });
+      document.getElementById('menuBtn').addEventListener('click', () => alert('Open navigation / account menu (implement).'));
+      document.getElementById('deleteAcct').addEventListener('click', () => {
+        if (!confirm('Delete account? This is a demo action.')) return;
+        alert('Call server API to delete account (implement).');
+      });
+
+      // initial load
+      loadBio();
+
+      // ensure SW ready (it will handle /save-bio and /user/bio)
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(()=>{});
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Sign Up - Gamify</title>
+    <link rel="icon" href="{{ url_for('static', filename='images/mainicon.png') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+  </head>
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then(() => console.log('SW registered'))
+        .catch(err => console.error('SW failed', err));
+    }
+  </script>
+  <body>
+    <!-- floating logo (same behaviour as login) -->
+    <div class="auth-logo" aria-hidden="true">
+      <img id="logo" src="{{ url_for('static', filename='images/transp512.png') }}" alt="Logo" />
+    </div>
+
+    <main class="login-box" role="main" aria-labelledby="signupTitle">
+      <h1 id="signupTitle">Create an account</h1>
+
+      <form id="signupForm" autocomplete="on" method="post" action="{{ url_for('add_user') }}" novalidate>
+        <div class="form-group">
+          <label for="username">Username</label>
+          <input id="username" name="username" type="text" required minlength="3" placeholder="yourname" />
+        </div>
+
+        <div class="form-group">
+          <label for="email">Email</label>
+          <input id="email" name="email" type="email" required placeholder="name@example.com" />
+        </div>
+
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input id="password" name="password" type="password" required minlength="6" placeholder="••••••••" />
+        </div>
+
+        <div class="form-group">
+          <label for="confirmPassword">Confirm password</label>
+          <input id="confirmPassword" name="confirmPassword" type="password" required minlength="6" placeholder="••••••••" />
+        </div>
+
+        <div class="actions">
+          <button type="submit" value="signup">Create account</button>
+        </div>
+
+        <p class="muted">
+          Already have an account?
+          <a class="small-link" href="{{ url_for('login') }}">Sign in</a>
+        </p>
+      </form>
+    </main>
+
+    <script>
+      // show logo
+      const wrap = document.querySelector('.logo-wrap');
+      requestAnimationFrame(()=> setTimeout(()=> wrap.classList.add('visible'), 180) );
+
+      // same parallax behavior as login
+      (function(){
+        const logo = document.getElementById('logo');
+        if (!logo) return;
+        const maxPixels = 5;
+        let raf = null;
+        function onMove(clientX, clientY){
+          const cx = window.innerWidth / 2;
+          const cy = window.innerHeight / 2;
+          const nx = (clientX - cx) / cx;
+          const ny = (clientY - cy) / cy;
+          const tx = nx * maxPixels;
+          const ty = ny * maxPixels;
+          logo.style.transform = `translate3d(${tx}px, ${ty}px, 0)`;
+        }
+        function handlePointer(e){
+          const x = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
+          const y = (e.touches && e.touches[0]) ? e.touches[0].clientY : e.clientY;
+          if (raf) cancelAnimationFrame(raf);
+          raf = requestAnimationFrame(()=> onMove(x,y));
+        }
+        function reset(){ if (raf) cancelAnimationFrame(raf); logo.style.transform = 'translate3d(0,0,0)'; }
+        window.addEventListener('mousemove', handlePointer, {passive:true});
+        window.addEventListener('pointermove', handlePointer, {passive:true});
+        window.addEventListener('touchmove', handlePointer, {passive:true});
+        window.addEventListener('mouseleave', reset);
+        window.addEventListener('pointerleave', reset);
+        window.addEventListener('blur', reset);
+      })();
+
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch(()=>{});
+      }
+    </script>
+
+    <script src="{{ url_for('static', filename='js/dusty.js') }}"></script>
+  </body>
+</html>

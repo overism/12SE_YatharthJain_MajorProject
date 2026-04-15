@@ -1,0 +1,114 @@
+#could be used to search up events by subject, description, location, date, etc
+def search_games(q, limit=100):
+    if not q:
+        return []
+    q = q.strip()
+    pattern = f"%{q.lower()}%"
+    db_path = os.path.join(basedir, 'gamify.db')
+    results = []
+    connection = None
+    try:
+        connection = sqlite3.connect(db_path)
+        connection.row_factory = sqlite3.Row
+        cursor = connection.cursor()
+
+        # Search in gameName, genre, gameDev, gameDesc (prioritise gameName first)
+        sql = """
+            SELECT gameID, gameName, gameDev, genre, gameDesc, ageRating, logo, banner, trailer, patchNotes, sysReqs
+            FROM games
+            WHERE LOWER(gameName) LIKE ?
+               OR LOWER(genre) LIKE ?
+               OR LOWER(gameDev) LIKE ?
+               OR LOWER(gameDesc) LIKE ?
+            LIMIT ?
+        """
+        params = [pattern, pattern, pattern, pattern, limit]
+        print(f"[DEBUG] search_games SQL: {sql[:80]}... params={params[:3]}...")
+        cursor.execute(sql, params)
+        rows = cursor.fetchall()
+        for r in rows:
+            results.append({k: r[k] for k in r.keys()})
+        print(f"[DEBUG] search_games: found {len(results)} rows for q={q!r}")
+        return results
+
+    except Exception as exc:
+        print("[ERROR] search_games exception:", exc)
+        traceback.print_exc()
+        return []
+    finally:
+        if connection:
+            connection.close()
+
+#could be used to sort events by subject
+def get_games_by_genre(limit_per_genre=10):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    cursor.execute("SELECT gameID, gameName, genre, banner FROM games ORDER BY genre, gameName")
+    
+    rows = cursor.fetchall()
+    connection.close()
+
+    categories = {}
+
+    for row in rows:
+        genre = row["genre"]
+        if genre not in categories:
+            categories[genre] = []
+        if len(categories[genre]) < limit_per_genre:
+            categories[genre].append(dict(row))
+
+    return categories
+
+#could be used for dashboard cards
+@app.route('/game/<int:game_id>')
+@login_required
+def game_detail(game_id):
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    game = cursor.execute("SELECT gameID, gameName, gameDev, genre, gameDesc, ageRating, logo, banner, trailer, patchNotes, sysReqs FROM games WHERE gameID = ?", (game_id,)).fetchone()
+
+    rating = cursor.execute("SELECT COUNT(*) as reviewCount, ROUND(AVG(revRating), 1) as avgRating FROM reviews WHERE gameID = ?", (game_id,)).fetchone()
+    
+    connection.close()
+    
+    if not game:
+        return "Game not found", 404
+
+    return render_template('game_detail.html', game=dict(game), rating=dict(rating))
+
+#could be used for chat history or progress reports
+@app.route('/add_to_library/<int:game_id>', methods=['POST'])
+@login_required
+def add_to_library(game_id):
+    user_id = session.get('user_id')
+
+    connection = get_db_connection()
+    cursor = connection.cursor()
+    existing_game = cursor.execute("SELECT * FROM user_library WHERE userID = ? AND gameID = ?", (user_id, game_id)).fetchone()
+
+    if existing_game:
+        connection.close()
+        return redirect(url_for('library'))
+    
+    # Insert the game into the user library
+    cursor.execute("INSERT INTO user_library (userID, gameID) VALUES (?, ?)", (user_id, game_id))
+    connection.commit()
+    connection.close()
+
+    return redirect(url_for('library'))
+
+@app.route('/library')
+@login_required
+def library():
+    user_id = session.get('user_id')
+    connection = get_db_connection()
+    cursor = connection.cursor()
+
+    games = cursor.execute("SELECT g.gameID, g.gameName, g.banner FROM games g JOIN user_library ul ON g.gameID = ul.gameID WHERE ul.userID = ?", (user_id,)).fetchall()
+
+    connection.close()
+
+    return render_template('library.html', games=[dict(g) for g in games])
+

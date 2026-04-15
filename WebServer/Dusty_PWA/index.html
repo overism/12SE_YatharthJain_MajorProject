@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en-US" dir="ltr">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dusty - Your Personal Study Assistant</title>
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='images/mainicon.png') }}">
+  </head>
+  <body class="landing-body">
+    <div class="intro-screen" id="intro-screen" aria-hidden="true">
+      <div class="intro-logo" id="intro-logo">
+        <img src="{{ url_for('static', filename='images/transp512.png') }}" alt="Dusty logo">
+      </div>
+      <div class="broom" aria-hidden="true">
+        <img src="{{ url_for('static', filename='images/mainicon.png') }}" alt="">
+      </div>
+      <div class="intro-glow"></div>
+    </div>
+
+    <div class="page-shell">
+      <header class="topbar" role="banner">
+        <a class="brand" href="{{ url_for('home') }}" aria-label="Dusty home">
+          <img src="{{ url_for('static', filename='images/transp512.png') }}" alt="Dusty logo">
+        </a>
+        <nav class="nav" role="navigation" aria-label="Auth pages">
+          <a class="btn btn-ghost" href="{{ url_for('home') }}">Home</a>
+          <a class="btn btn-ghost" href="{{ url_for('login') }}">Sign In</a>
+          <a class="btn btn-primary" href="{{ url_for('signup') }}">Sign Up</a>
+          <a class="btn btn-profile" href="{{ url_for('profile') }}">Profile</a>
+        </nav>
+      </header>
+
+      <main>
+        <section class="hero-section">
+          <div class="hero-copy">
+            <p class="eyebrow">Study workflows, but actually calm</p>
+            <h2>Dusty turns messy study piles into a clean, guided system.</h2>
+            <p class="hero-text">
+              Upload notes, organise resources, and move through revision with an assistant that feels
+              focused instead of overwhelming.
+            </p>
+            <div class="hero-actions">
+              <a class="btn btn-primary" href="{{ url_for('signup') }}">Start Free</a>
+              <a class="btn btn-ghost" href="#feature-book">See the story</a>
+            </div>
+            <ul class="hero-points" aria-label="Feature highlights">
+              <li>Smart organisation for notes and study material</li>
+              <li>Clear revision flow from setup to exam prep</li>
+              <li>Designed to reduce clutter and decision fatigue</li>
+            </ul>
+          </div>
+
+          <div class="hero-stage" aria-hidden="true">
+            <div class="floating-card floating-card-left">
+              <span class="card-label">Plan</span>
+              <strong>Task breakdowns</strong>
+              <p>Break a giant subject into manageable sessions.</p>
+            </div>
+            <div class="floating-card floating-card-center">
+              <span class="card-label">Focus</span>
+              <strong>Dust-free dashboard</strong>
+              <p>Only the next useful action stays in view.</p>
+            </div>
+            <div class="floating-card floating-card-right">
+              <span class="card-label">Recall</span>
+              <strong>Quick revision loops</strong>
+              <p>Return to the right notes at the right time.</p>
+            </div>
+            <div class="hero-orbit hero-orbit-one"></div>
+            <div class="hero-orbit hero-orbit-two"></div>
+          </div>
+        </section>
+
+        <section class="book-section" id="feature-book">
+          <div class="section-copy">
+            <p class="eyebrow">Scroll the book</p>
+            <h2>Each page reveals one reason Dusty feels different.</h2>
+            <p>Scroll through the chapter below and watch the feature story unfold.</p>
+          </div>
+
+          <div class="book-scroll" id="book-scroll">
+            <div class="book-sticky">
+              <div class="book-frame">
+                <div class="book-spine"></div>
+                <div class="book-cover-left">
+                  <p class="cover-kicker">Dusty Guide</p>
+                  <h3>Your study stack, rewritten.</h3>
+                  <p>As each page turns, the next part of the product comes into focus.</p>
+                  <div class="book-progress">
+                    <span class="book-progress-bar" id="book-progress-bar"></span>
+                  </div>
+                </div>
+
+                <div class="book-pages" id="book-pages">
+                  <article class="book-page page-one">
+                    <div class="page-content">
+                      <p class="page-number">01</p>
+                      <h3>Collect everything in one clean workspace.</h3>
+                      <p>
+                        Notes, links, and study plans stop living in ten separate tabs and start feeling
+                        usable.
+                      </p>
+                    </div>
+                  </article>
+
+                  <article class="book-page page-two">
+                    <div class="page-content">
+                      <p class="page-number">02</p>
+                      <h3>See what matters now instead of everything at once.</h3>
+                      <p>
+                        Dusty keeps the interface focused so your revision sessions start faster and stay
+                        calmer.
+                      </p>
+                    </div>
+                  </article>
+
+                  <article class="book-page page-three">
+                    <div class="page-content">
+                      <p class="page-number">03</p>
+                      <h3>Turn revision into a repeatable rhythm.</h3>
+                      <p>
+                        Plan, revisit, and reinforce ideas with a flow that nudges you toward consistency.
+                      </p>
+                    </div>
+                  </article>
+
+                  <article class="book-page page-four">
+                    <div class="page-content">
+                      <p class="page-number">04</p>
+                      <h3>End on momentum, not overwhelm.</h3>
+                      <p>
+                        The last page lands on action: clear next steps, faster setup, and less academic
+                        chaos.
+                      </p>
+                    </div>
+                  </article>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="cta-section">
+          <div class="cta-panel">
+            <p class="eyebrow">Ready to study cleaner?</p>
+            <h2>Start building your workspace with Dusty today.</h2>
+            <p>
+              Create an account and turn scattered study material into a workflow you can actually keep up with.
+            </p>
+            <div class="hero-actions">
+              <a class="btn btn-primary" href="{{ url_for('signup') }}">Create Account</a>
+              <a class="btn btn-ghost" href="{{ url_for('login') }}">Sign In</a>
+            </div>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+      }
+
+      const introScreen = document.getElementById('intro-screen');
+      const introLogo = document.getElementById('intro-logo');
+      const bookSection = document.getElementById('book-scroll');
+      const bookPages = Array.from(document.querySelectorAll('.book-page'));
+      const progressBar = document.getElementById('book-progress-bar');
+      const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      function finishIntro() {
+        document.body.classList.add('intro-finished');
+        if (introScreen) {
+          introScreen.classList.add('is-hidden');
+          window.setTimeout(() => introScreen.remove(), 900);
+        }
+      }
+
+      function updateBookAnimation() {
+        if (!bookSection || !bookPages.length) {
+          return;
+        }
+
+        const rect = bookSection.getBoundingClientRect();
+        const maxScroll = Math.max(bookSection.offsetHeight - window.innerHeight, 1);
+        const scrolled = Math.min(Math.max(-rect.top, 0), maxScroll);
+        const progress = scrolled / maxScroll;
+        const segment = 1 / bookPages.length;
+
+        if (progressBar) {
+          progressBar.style.transform = `scaleX(${Math.min(Math.max(progress, 0.04), 1)})`;
+        }
+
+        bookPages.forEach((page, index) => {
+          const start = segment * index;
+          const localProgress = Math.min(Math.max((progress - start) / segment, 0), 1);
+          const angle = -172 * localProgress;
+          const lift = 12 * localProgress;
+          const shadow = 0.14 + localProgress * 0.18;
+
+          page.style.setProperty('--page-rotation', `${angle}deg`);
+          page.style.setProperty('--page-lift', `${lift}px`);
+          page.style.setProperty('--page-shadow', shadow.toFixed(2));
+        });
+      }
+
+      if (prefersReducedMotion) {
+        if (introLogo) {
+          introLogo.classList.add('is-visible');
+        }
+        finishIntro();
+      } else {
+        window.setTimeout(() => {
+          if (introLogo) {
+            introLogo.classList.add('is-visible');
+          }
+        }, 3250);
+        window.setTimeout(finishIntro, 4400);
+      }
+
+      updateBookAnimation();
+      document.addEventListener('scroll', updateBookAnimation, { passive: true });
+      window.addEventListener('resize', updateBookAnimation);
+    </script>
+  </body>
+</html>
