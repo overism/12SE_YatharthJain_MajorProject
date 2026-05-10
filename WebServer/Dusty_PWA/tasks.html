@@ -3,22 +3,26 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Dashboard - Gamify</title>
+        <title>Tasks - Dusty</title>
         <link rel="icon" href="{{ url_for('static', filename='images/mainicon.png') }}">
         <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
         <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/tasks.css') }}">
+        <script src="https://cdn.jsdelivr.net/npm/ag-grid-community/dist/ag-grid-community.min.js"></script>
+        <script defer src="{{ url_for('static', filename='js/dusty.js') }}"></script>
     </head>
-    <script>
-        if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js')
-            .then(() => console.log('SW registered'))
-            .catch(err => console.error('SW failed', err));
-        }
-    </script>
     <body>
+        <script>
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/sw.js')
+                    .then(() => console.log('SW registered'))
+                    .catch(err => console.error('SW failed', err));
+            }
+        </script>
+
         <sidebar class="sidebar" role="banner">
-            <a class="brand" href="{{ url_for('home') }}" aria-label="Gamify home">
-                <img src="{{ url_for('static', filename='images/transp512.png') }}" alt="Gamify logo">
+            <a class="brand" href="{{ url_for('home') }}" aria-label="Dashboard">
+                <img src="{{ url_for('static', filename='images/transp512.png') }}" alt="Dusty logo">
             </a>
             <nav class="nav" role="navigation" aria-label="Auth pages">
                 <a class="btn btn-ghost" href="{{ url_for('home') }}">Dashboard</a>
@@ -31,4 +35,82 @@
                 <a class="btn btn-ghost" href="{{ url_for('resources') }}">Resources</a>
             </nav>
         </sidebar>
-        
+
+        <!-- Tasks Loading Screen -->
+        <div class="page-loading" id="tasks-loading">
+            <div class="page-loading-content">
+                <div class="page-loading-icon">
+                    <img src="{{ url_for('static', filename='images/tasks-icon.svg') }}" alt="Tasks icon">
+                </div>
+                <h2 class="page-loading-title">Loading Tasks</h2>
+                <p class="page-loading-subtitle">Organizing your assignments and deadlines...</p>
+                <div class="page-loading-progress">
+                    <div class="page-loading-progress-bar"></div>
+                </div>
+            </div>
+        </div>
+
+        <main class="tasks-container">
+            <div class="tasks-header">
+                <h1 class="tasks-title">Tasks</h1>
+            </div>
+
+            {% for subject in subjects %}
+            <section class="tasks-table-section task-table-{{ subject.colourScheme }}" data-task-table-id="subject-{{ subject.subjectID }}">
+                <div class="tasks-table-toolbar">
+                    <h2 class="subject-title">{{ subject.subjectName }}</h2>
+                    <button class="btn btn-secondary new-task-btn" type="button" data-table-target="subject-{{ subject.subjectID }}" data-subject-id="{{ subject.subjectID }}">+ New Task</button>
+                </div>
+
+                <div class="task-grid" data-subject-id="{{ subject.subjectID }}" data-task-table-id="subject-{{ subject.subjectID }}"></div>
+
+                <div class="task-form" aria-hidden="true" style="display: none;">
+                    <div class="task-form-content" role="dialog" aria-modal="true" aria-labelledby="taskFormTitle-{{ subject.subjectID }}">
+                        <button class="close-btn closeTaskBtn" type="button" aria-label="Close task form">&times;</button>
+                        <h2 class="task-form-title" id="taskFormTitle-{{ subject.subjectID }}">New Task for {{ subject.subjectName }}</h2>
+
+                        <form class="taskFormData" method="post" action="{{ url_for('create_task') }}" data-subject-id="{{ subject.subjectID }}" novalidate>
+                            <div class="form-group">
+                                <label for="taskTitle-{{ subject.subjectID }}">Task *</label>
+                                <input type="text" id="taskTitle-{{ subject.subjectID }}" class="taskTitle" name="taskTitle" required maxlength="120" placeholder="Enter task name">
+                            </div>
+
+                            <input type="hidden" class="subjectID" name="subjectID" value="{{ subject.subjectID }}">
+
+                            <div class="form-group">
+                                <label for="taskDueDate-{{ subject.subjectID }}">Due Date *</label>
+                                <input type="date" id="taskDueDate-{{ subject.subjectID }}" class="taskDueDate" name="taskDueDate" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="taskType-{{ subject.subjectID }}">Type *</label>
+                                <select id="taskType-{{ subject.subjectID }}" class="taskType" name="taskType" required>
+                                    <option value="">Select task type</option>
+                                    <option value="Homework">Homework</option>
+                                    <option value="Exam">Exam</option>
+                                    <option value="Project">Project</option>
+                                    <option value="Study">Study</option>
+                                    <option value="Assignment">Assignment</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="taskStatusInput-{{ subject.subjectID }}">Status *</label>
+                                <input type="number" id="taskStatusInput-{{ subject.subjectID }}" class="taskStatusInput" name="taskStatusInput" required min="0" max="100" step="1" placeholder="Progress percentage">
+                            </div>
+
+                            <div class="actions">
+                                <button type="button" class="btn btn-secondary cancelTaskBtn">Cancel</button>
+                                <button type="submit" class="btn btn-primary">Save Task</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </section>
+            {% endfor %}
+
+            <div id="taskStatus" class="status"></div>
+        </main>
+    </body>
+</html>

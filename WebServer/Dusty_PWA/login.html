@@ -23,7 +23,7 @@
     <main class="login-box" role="main" aria-labelledby="loginTitle">
       <h1 id="loginTitle">Sign In to Gamify</h1>
 
-      <form id="loginForm" autocomplete="on" method="post" action="{{ url_for('login_validation') }}" novalidate>
+      <form id="loginForm" autocomplete="off" method="post" action="{{ url_for('login_validation') }}" novalidate>
         <div class="form-group">
           <label for="username">Username</label>
           <input id="username" name="username" type="text" required minlength="3" placeholder="yourname" />
