@@ -72,7 +72,6 @@ html {
     border: none;
     border-radius: 12px;
     cursor: pointer;
-    font-size: 14px;
     font-weight: 600;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
@@ -331,18 +330,22 @@ html {
 
 /* Event Colors by Source */
 .fc-event[data-source="auto"] {
-    background: #ead666 !important;
-    border-color: #d8a15a !important;
+    background: #7cea66 !important;
+    border-color: #1d8d0e !important;
 }
 
 .fc-event[data-source="google"] {
-    background: #db6e07 !important;
-    border-color: #a05005 !important;
+    background: linear-gradient(135deg, #ec6307 0%, #e72005 100%) !important;
+    border-color: #a01705 !important;
 }
 
 .fc-event[data-source="user"] {
-    background: #f5761c !important;
-    border-color: #d63a16 !important;
+    background: #f5b01c !important;
+    border-color: #d69316 !important;
+}
+
+.fc-daygrid-event-dot {
+    border-color: rgb(7, 108, 219) !important;
 }
 
 /* Drag and Drop */

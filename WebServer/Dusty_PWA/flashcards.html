@@ -1,34 +1,208 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Dashboard - Gamify</title>
-        <link rel="icon" href="{{ url_for('static', filename='images/mainicon.png') }}">
-        <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-        <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
-    </head>
-    <script>
-        if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js')
-            .then(() => console.log('SW registered'))
-            .catch(err => console.error('SW failed', err));
-        }
-    </script>
-    <body>
-        <sidebar class="sidebar" role="banner">
-            <a class="brand" href="{{ url_for('home') }}" aria-label="Gamify home">
-                <img src="{{ url_for('static', filename='images/transp512.png') }}" alt="Gamify logo">
-            </a>
-            <nav class="nav" role="navigation" aria-label="Auth pages">
-                <a class="btn btn-ghost" href="{{ url_for('home') }}">Dashboard</a>
-                <a class="btn btn-ghost" href="{{ url_for('calendar') }}">Smart Calendar</a>
-                <a class="btn btn-ghost" href="{{ url_for('tasks') }}">Tasks</a>
-                <a class="btn btn-ghost" href="{{ url_for('timer') }}">Study Timer</a>
-                <a class="btn btn-ghost" href="{{ url_for('chat') }}">AI Assistant</a>
-                <a class="btn btn-active" href="{{ url_for('flashcards') }}">Flashcards</a>
-                <a class="btn btn-ghost" href="{{ url_for('progress') }}">Progress</a>
-                <a class="btn btn-ghost" href="{{ url_for('resources') }}">Resources</a>
-            </nav>
-        </sidebar>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Flashcards - Dusty</title>
+    <link rel="icon" href="{{ url_for('static', filename='images/mainicon.png') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/flashcards.css') }}">
+    <script defer src="{{ url_for('static', filename='js/subject-colours.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/subject-colours.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/dusty.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/flashcards.js') }}"></script>
+    <style>
         
+    </style>
+</head>
+<body>
+<div id="fcStatus" class="status"></div>
+
+<!-- ══ SUBJECT SELECTION MODAL ══ -->
+<div id="subjectModal" class="modal-overlay">
+    <div class="modal-box">
+        <h2 class="modal-title">Choose a Subject</h2>
+        <p class="modal-sub">Select a subject to generate or browse flashcard decks.</p>
+
+        <div class="modal-subject-grid" id="modalSubjectGrid">
+            <!-- populated by JS -->
+        </div>
+
+        <div class="modal-form-row">
+            <label>
+                <span>Module / Topic</span>
+                <input type="text" id="modalModule" placeholder="e.g. Module 1 — Kinematics" />
+            </label>
+            <label style="max-width:100px">
+                <span>Cards</span>
+                <input type="number" id="modalCount" value="6" min="3" max="12" />
+            </label>
+        </div>
+
+        <div class="modal-actions">
+            <button class="btn btn-ghost" onclick="closeModal()" style="color:#aaa;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1)">Skip</button>
+            <button class="btn btn-primary" onclick="generateFromModal()">Generate Deck ↗</button>
+        </div>
+    </div>
+</div>
+
+<sidebar class="sidebar" role="banner">
+    <a class="brand" href="{{ url_for('home') }}" aria-label="Dusty home">
+        <img src="{{ url_for('static', filename='images/transp512.png') }}" alt="Dusty logo">
+    </a>
+    <nav class="nav" role="navigation" aria-label="Study pages">
+        <a class="btn btn-ghost" href="{{ url_for('home') }}">Dashboard</a>
+        <a class="btn btn-ghost" href="{{ url_for('calendar') }}">Smart Calendar</a>
+        <a class="btn btn-ghost" href="{{ url_for('tasks') }}">Tasks</a>
+        <a class="btn btn-ghost" href="{{ url_for('timer') }}">Study Timer</a>
+        <a class="btn btn-ghost" href="{{ url_for('chat') }}">AI Assistant</a>
+        <a class="btn btn-active" href="{{ url_for('flashcards') }}">Flashcards</a>
+        <a class="btn btn-ghost" href="{{ url_for('progress') }}">Progress</a>
+        <a class="btn btn-ghost" href="{{ url_for('resources') }}">Resources</a>
+    </nav>
+</sidebar>
+
+<div class="flashcards-container">
+
+    <!-- Header -->
+    <div class="flashcards-header">
+        <div>
+            <h1 class="flashcards-title">Flashcards</h1>
+        </div>
+        <div class="flashcards-controls">
+            <button class="btn btn-ghost" onclick="openModal()">+ New Deck</button>
+            <button class="btn btn-secondary" id="restartBtn" onclick="restartDeck()" style="display:none">↺ Restart</button>
+        </div>
+    </div>
+
+    <!-- ══ ACTIVE DECK STUDY AREA ══ -->
+    <div class="deck-area" id="deckArea">
+
+        <div class="deck-meta">
+            <div class="deck-meta-left">
+                <h2 id="deckTitle">Deck Title</h2>
+                <p id="deckMeta">Subject · Module</p>
+            </div>
+            <div class="deck-progress-row">
+                <span class="progress-badge badge-green">✓ <span id="countKnew">0</span> Knew it</span>
+                <span class="progress-badge badge-yellow">~ <span id="countUnsure">0</span> Unsure</span>
+                <span class="progress-badge badge-red">✗ <span id="countMissed">0</span> Missed</span>
+            </div>
+        </div>
+
+        <!-- Card -->
+        <div class="card-stage">
+            <div class="card-counter" id="cardCounter">Card 1 of 6</div>
+            <div class="card-flip-wrap" id="cardFlip" onclick="flipCard()">
+                <div class="card-face card-front">
+                    <span class="card-face-label">Question</span>
+                    <p class="card-question" id="cardQuestion">Loading...</p>
+                    <span class="card-tap-hint">Tap to reveal answer</span>
+                </div>
+                <div class="card-face card-back">
+                    <span class="card-face-label" style="color:rgba(245,118,28,0.8)">Answer</span>
+                    <p class="card-question" id="cardAnswer"></p>
+                    <p class="card-hint" id="cardHint" style="display:none"></p>
+                </div>
+            </div>
+
+            <!-- Traffic light controls -->
+            <div class="traffic-controls" id="trafficControls" style="display:none">
+                <button class="traffic-btn btn-missed" onclick="sortCard('missed')">
+                    <span class="traffic-icon">🔴</span>Didn't know
+                </button>
+                <button class="traffic-btn btn-unsure" onclick="sortCard('unsure')">
+                    <span class="traffic-icon">🟡</span>Unsure
+                </button>
+                <button class="traffic-btn btn-knew" onclick="sortCard('knew')">
+                    <span class="traffic-icon">🟢</span>Knew it!
+                </button>
+            </div>
+
+            <div class="card-nav">
+                <button class="btn btn-outline" onclick="prevCard()">← Prev</button>
+                <button class="btn btn-outline" id="flipHintBtn" onclick="flipCard()">Flip Card</button>
+                <button class="btn btn-outline" onclick="nextCard()">Next →</button>
+            </div>
+        </div>
+
+        <!-- Sort piles -->
+        <div class="sort-piles">
+            <div class="sort-pile pile-knew">
+                <div class="pile-label pile-label-knew">🟢 Knew it</div>
+                <div class="pile-count" id="pileKnew">0</div>
+                <div class="pile-bar-track"><div class="pile-bar-fill fill-green" id="barKnew" style="width:0%"></div></div>
+            </div>
+            <div class="sort-pile pile-unsure">
+                <div class="pile-label pile-label-unsure">🟡 Unsure</div>
+                <div class="pile-count" id="pileUnsure">0</div>
+                <div class="pile-bar-track"><div class="pile-bar-fill fill-yellow" id="barUnsure" style="width:0%"></div></div>
+            </div>
+            <div class="sort-pile pile-missed">
+                <div class="pile-label pile-label-missed">🔴 Missed</div>
+                <div class="pile-count" id="pileMissed">0</div>
+                <div class="pile-bar-track"><div class="pile-bar-fill fill-red" id="barMissed" style="width:0%"></div></div>
+            </div>
+        </div>
+
+        <!-- Session complete -->
+        <div class="session-complete" id="sessionComplete">
+            <div style="font-size:48px;margin-bottom:12px">🎉</div>
+            <h3>Deck Complete!</h3>
+            <p>Here's how you went this session.</p>
+            <div class="session-result-grid">
+                <div class="result-tile" style="background:rgba(0,191,99,0.1);border:1.5px solid rgba(0,191,99,0.25)">
+                    <strong id="finalKnew" style="color:#007a3d">0</strong>
+                    <span style="color:#007a3d">Knew it</span>
+                </div>
+                <div class="result-tile" style="background:rgba(255,211,89,0.12);border:1.5px solid rgba(255,211,89,0.35)">
+                    <strong id="finalUnsure" style="color:#7a5c00">0</strong>
+                    <span style="color:#7a5c00">Unsure</span>
+                </div>
+                <div class="result-tile" style="background:rgba(255,49,49,0.08);border:1.5px solid rgba(255,49,49,0.2)">
+                    <strong id="finalMissed" style="color:#9a0000">0</strong>
+                    <span style="color:#9a0000">Missed</span>
+                </div>
+            </div>
+            <button class="btn btn-primary" onclick="restartDeck()" style="margin-right:8px">↺ Study Again</button>
+            <button class="btn btn-outline" onclick="studyMissed()">Study Missed Only</button>
+        </div>
+
+    </div>
+    <!-- /deck-area -->
+
+    <!-- ══ DECK LIBRARY ══ -->
+    <div class="library-section">
+        <h2>Deck Library</h2>
+        <p class="sub">Your generated decks. Click any deck to start studying.</p>
+
+        <!-- Quick generate bar -->
+        <div class="generate-row" id="generateRow">
+            <label>
+                <span>Subject</span>
+                <select id="libSubjectSelect"></select>
+            </label>
+            <label>
+                <span>Module / Topic</span>
+                <input type="text" id="libModuleInput" placeholder="e.g. Calculus" />
+            </label>
+            <label style="max-width:90px">
+                <span>Cards</span>
+                <input type="number" id="libCardCount" value="6" min="3" max="12" />
+            </label>
+            <button class="btn btn-primary" id="libGenerateBtn" onclick="generateDeck()">Generate</button>
+        </div>
+
+        <div class="deck-grid" id="deckGrid">
+            <div class="empty-state">
+                <div class="icon">🃏</div>
+                <p>No decks yet. Generate your first deck above or use the <strong>+ New Deck</strong> button.</p>
+            </div>
+        </div>
+    </div>
+
+</div>
+<!-- /flashcards-container -->
+</body>
+</html>

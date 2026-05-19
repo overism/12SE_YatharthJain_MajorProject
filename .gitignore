@@ -137,3 +137,16 @@ dist
 # Vite logs files
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
+
+#secrets
+secrets/
+
+#database
+Chat_Database/
+data/
+
+.codex_tmp_task_save_check/
+
+WebServer/Dusty_PWA/dusty.db
+
+*.db

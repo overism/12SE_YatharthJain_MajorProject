@@ -1,34 +1,118 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Dashboard - Gamify</title>
-        <link rel="icon" href="{{ url_for('static', filename='images/mainicon.png') }}">
-        <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-        <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
-    </head>
-    <script>
-        if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js')
-            .then(() => console.log('SW registered'))
-            .catch(err => console.error('SW failed', err));
-        }
-    </script>
-    <body>
-        <sidebar class="sidebar" role="banner">
-            <a class="brand" href="{{ url_for('home') }}" aria-label="Gamify home">
-                <img src="{{ url_for('static', filename='images/transp512.png') }}" alt="Gamify logo">
-            </a>
-            <nav class="nav" role="navigation" aria-label="Auth pages">
-                <a class="btn btn-ghost" href="{{ url_for('home') }}">Dashboard</a>
-                <a class="btn btn-ghost" href="{{ url_for('calendar') }}">Smart Calendar</a>
-                <a class="btn btn-ghost" href="{{ url_for('tasks') }}">Tasks</a>
-                <a class="btn btn-ghost" href="{{ url_for('timer') }}">Study Timer</a>
-                <a class="btn btn-ghost" href="{{ url_for('chat') }}">AI Assistant</a>
-                <a class="btn btn-ghost" href="{{ url_for('flashcards') }}">Flashcards</a>
-                <a class="btn btn-active" href="{{ url_for('progress') }}">Progress</a>
-                <a class="btn btn-ghost" href="{{ url_for('resources') }}">Resources</a>
-            </nav>
-        </sidebar>
-        
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Progress - Dusty</title>
+    <link rel="icon" href="{{ url_for('static', filename='images/mainicon.png') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/progress.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+    <script defer src="{{ url_for('static', filename='js/subject-colours.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/dusty.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/progress.js') }}"></script>
+</head>
+<body>
+<div id="pgStatus" class="status"></div>
+
+<sidebar class="sidebar" role="banner">
+    <a class="brand" href="{{ url_for('home') }}" aria-label="Dusty home">
+        <img src="{{ url_for('static', filename='images/transp512.png') }}" alt="Dusty logo">
+    </a>
+    <nav class="nav" role="navigation" aria-label="Study pages">
+        <a class="btn btn-ghost" href="{{ url_for('home') }}">Dashboard</a>
+        <a class="btn btn-ghost" href="{{ url_for('calendar') }}">Smart Calendar</a>
+        <a class="btn btn-ghost" href="{{ url_for('tasks') }}">Tasks</a>
+        <a class="btn btn-ghost" href="{{ url_for('timer') }}">Study Timer</a>
+        <a class="btn btn-ghost" href="{{ url_for('chat') }}">AI Assistant</a>
+        <a class="btn btn-ghost" href="{{ url_for('flashcards') }}">Flashcards</a>
+        <a class="btn btn-active" href="{{ url_for('progress') }}">Progress</a>
+        <a class="btn btn-ghost" href="{{ url_for('resources') }}">Resources</a>
+    </nav>
+</sidebar>
+
+<div class="progress-container">
+    <div class="progress-header">
+        <div>
+            <h1 class="progress-title">Progress</h1>
+        </div>
+        <div>
+            <button class="btn btn-ghost" onclick="loadProgress()">↺ Refresh</button>
+        </div>
+    </div>
+
+    <div class="progress-inner" id="progressInner">
+
+        <div class="metric-row" id="metricRow">
+            <div class="loading-pulse">
+                <div class="pulse-bar" style="width:100%;height:120px;border-radius:16px"></div>
+            </div>
+        </div>
+
+        <div class="chart-grid-2">
+            <div class="panel-card">
+                <div class="panel-header">
+                    <div class="panel-title"><span class="panel-title-accent"></span>Task Status</div>
+                </div>
+                <div class="chart-wrap"><canvas id="chartTaskStatus"></canvas></div>
+            </div>
+            <div class="panel-card">
+                <div class="panel-header">
+                    <div class="panel-title"><span class="panel-title-accent"></span>Study Time by Subject</div>
+                    <span style="font-size:12px;color:#aaa" id="studyTimeTotal"></span>
+                </div>
+                <div class="chart-wrap"><canvas id="chartStudyTime"></canvas></div>
+            </div>
+        </div>
+
+        <div class="chart-grid-2">
+            <div class="panel-card">
+                <div class="panel-header">
+                    <div class="panel-title"><span class="panel-title-accent"></span>Subject Progress</div>
+                </div>
+                <div class="subject-bars" id="subjectBars">
+                    <div class="loading-pulse"><div class="pulse-bar"></div><div class="pulse-bar" style="width:80%"></div><div class="pulse-bar" style="width:65%"></div></div>
+                </div>
+            </div>
+            <div class="panel-card">
+                <div class="panel-header">
+                    <div class="panel-title"><span class="panel-title-accent"></span>Session Outcomes</div>
+                </div>
+                <div class="chart-wrap"><canvas id="chartSessionOutcomes"></canvas></div>
+            </div>
+        </div>
+
+        <div class="panel-card">
+            <div class="panel-header">
+                <div class="panel-title"><span class="panel-title-accent"></span>Study Activity — Last 14 Days</div>
+            </div>
+            <div class="chart-wrap chart-wrap-lg"><canvas id="chartWeekly"></canvas></div>
+        </div>
+
+        <div class="chart-grid-2">
+            <div class="panel-card">
+                <div class="panel-header">
+                    <div class="panel-title"><span class="panel-title-accent"></span>Upcoming Tasks</div>
+                </div>
+                <div class="upcoming-list" id="upcomingList">
+                    <div class="loading-pulse"><div class="pulse-bar"></div><div class="pulse-bar" style="width:80%"></div></div>
+                </div>
+            </div>
+            <div class="panel-card">
+                <div class="panel-header">
+                    <div class="panel-title"><span class="panel-title-accent"></span>Recent Sessions</div>
+                </div>
+                <div style="overflow-x:auto">
+                    <table class="sessions-table" id="sessionsTable">
+                        <thead><tr><th>Subject</th><th>Duration</th><th>Time Spent</th><th>Status</th></tr></thead>
+                        <tbody id="sessionsBody"><tr><td colspan="4"><div class="loading-pulse"><div class="pulse-bar"></div></div></td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+</body>
+</html>

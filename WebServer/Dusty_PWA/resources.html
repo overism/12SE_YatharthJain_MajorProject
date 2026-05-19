@@ -1,34 +1,90 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Dashboard - Gamify</title>
-        <link rel="icon" href="{{ url_for('static', filename='images/mainicon.png') }}">
-        <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-        <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
-    </head>
-    <script>
-        if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js')
-            .then(() => console.log('SW registered'))
-            .catch(err => console.error('SW failed', err));
-        }
-    </script>
-    <body>
-        <sidebar class="sidebar" role="banner">
-            <a class="brand" href="{{ url_for('home') }}" aria-label="Gamify home">
-                <img src="{{ url_for('static', filename='images/transp512.png') }}" alt="Gamify logo">
-            </a>
-            <nav class="nav" role="navigation" aria-label="Auth pages">
-                <a class="btn btn-ghost" href="{{ url_for('home') }}">Dashboard</a>
-                <a class="btn btn-ghost" href="{{ url_for('calendar') }}">Smart Calendar</a>
-                <a class="btn btn-ghost" href="{{ url_for('tasks') }}">Tasks</a>
-                <a class="btn btn-ghost" href="{{ url_for('timer') }}">Study Timer</a>
-                <a class="btn btn-ghost" href="{{ url_for('chat') }}">AI Assistant</a>
-                <a class="btn btn-ghost" href="{{ url_for('flashcards') }}">Flashcards</a>
-                <a class="btn btn-ghost" href="{{ url_for('progress') }}">Progress</a>
-                <a class="btn btn-active" href="{{ url_for('resources') }}">Resources</a>
-            </nav>
-        </sidebar>
-        
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Resources - Dusty</title>
+    <link rel="icon" href="{{ url_for('static', filename='images/mainicon.png') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/resources.css') }}">
+    <script defer src="{{ url_for('static', filename='js/subject-colours.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/dusty.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/resources.js') }}"></script>
+</head>
+<body>
+<div id="rsStatus" class="status"></div>
+
+<sidebar class="sidebar" role="banner">
+    <a class="brand" href="{{ url_for('home') }}" aria-label="Dusty home">
+        <img src="{{ url_for('static', filename='images/transp512.png') }}" alt="Dusty logo">
+    </a>
+    <nav class="nav" role="navigation" aria-label="Study pages">
+        <a class="btn btn-ghost" href="{{ url_for('home') }}">Dashboard</a>
+        <a class="btn btn-ghost" href="{{ url_for('calendar') }}">Smart Calendar</a>
+        <a class="btn btn-ghost" href="{{ url_for('tasks') }}">Tasks</a>
+        <a class="btn btn-ghost" href="{{ url_for('timer') }}">Study Timer</a>
+        <a class="btn btn-ghost" href="{{ url_for('chat') }}">AI Assistant</a>
+        <a class="btn btn-ghost" href="{{ url_for('flashcards') }}">Flashcards</a>
+        <a class="btn btn-ghost" href="{{ url_for('progress') }}">Progress</a>
+        <a class="btn btn-active" href="{{ url_for('resources') }}">Resources</a>
+    </nav>
+</sidebar>
+
+<div class="resources-container">
+
+    <!-- Header -->
+    <div class="resources-header">
+        <div>
+            <h1 class="resources-title">Resource Library</h1>
+        </div>
+        <div class="header-right">
+            <div class="search-wrap">
+                <span class="search-icon">🔍</span>
+                <input type="search" id="resourceSearch" placeholder="Search files and folders…" oninput="handleSearch(this.value)">
+            </div>
+            <button class="btn btn-secondary" onclick="loadResources()">↺ Refresh</button>
+        </div>
+    </div>
+
+    <div class="resources-body">
+
+        <!-- ── LEFT TREE SIDEBAR ── -->
+        <div class="tree-sidebar">
+            <div class="tree-sidebar-header">
+                <h3>Explorer</h3>
+                <button onclick="collapseAll()" style="background:none;border:none;cursor:pointer;color:#bbb;font-size:12px;font-weight:600">Collapse all</button>
+            </div>
+            <div class="library-tabs" id="libraryTabs">
+                <!-- tabs injected by JS -->
+            </div>
+            <div class="tree-scroll" id="treeScroll">
+                <div style="padding:20px;color:#bbb;font-size:13px;text-align:center">Loading…</div>
+            </div>
+        </div>
+
+        <!-- ── MAIN CONTENT ── -->
+        <div class="resources-main">
+            <!-- Breadcrumb -->
+            <div class="breadcrumb" id="breadcrumb">
+                <a onclick="goHome()">📁 Library</a>
+            </div>
+
+            <!-- Content area -->
+            <div class="resources-content" id="resourcesContent">
+                <div class="loading-grid" id="loadingGrid">
+                    ${Array(8).fill('<div class="pulse-card"></div>').join('')}
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+// inline template string trick for the loading grid
+document.getElementById('loadingGrid').innerHTML = Array(8).fill('<div class="pulse-card"></div>').join('');
+</script>
+
+</body>
+</html>

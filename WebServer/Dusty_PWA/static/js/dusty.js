@@ -81,7 +81,7 @@ if (signupForm) {
         .then(data => {
             showPopup(data.title, data.message, () => {
                 if (data.success) {
-                    window.location.href = "/login";
+                    openPrefsModal();
                 }
             });
         })
@@ -195,583 +195,539 @@ function moveSearch() {
 window.addEventListener('resize', moveSearch);
 window.addEventListener('load', moveSearch);
 
+(function initDustyStudyTimer() {
+  const STORAGE_KEY = 'dusty.studyTimer.state';
+  const AUTOSAVE_SECONDS = 60;
+  const DEFAULT_STATE = {
+    isRunning: false,
+    isPaused: false,
+    totalSeconds: 3600,
+    remainingSeconds: 3600,
+    elapsedSeconds: 0,
+    currentSubject: null,
+    currentSubjectName: null,
+    currentPresetID: null,
+    currentPresetName: 'Custom Timer',
+    sessionID: null,
+    popout: false,
+    lastTickAt: null,
+    lastAutosaveElapsed: 0,
+    completedNotified: false
+  };
 
-// AG Grid Tasks Tables
+  const listeners = new Set();
 
-(function initSubjectTaskGrids() {
-  if (typeof agGrid === 'undefined') {
-    return;
+  function readState() {
+    try {
+      return Object.assign({}, DEFAULT_STATE, JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'));
+    } catch (error) {
+      return Object.assign({}, DEFAULT_STATE);
+    }
   }
 
-  document.addEventListener("DOMContentLoaded", () => {
-    // Show loading screen initially
-    const loadingScreen = document.getElementById('tasks-loading');
-    if (loadingScreen) {
-      loadingScreen.classList.remove('is-hidden');
+  function writeState(state, emit = true) {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    if (emit) {
+      listeners.forEach(listener => listener(Object.assign({}, state)));
+    }
+  }
+
+  function deriveState(emit = false) {
+    const state = readState();
+    if (!state.isRunning || !state.lastTickAt) {
+      return state;
     }
 
-    const sections = Array.from(document.querySelectorAll(".tasks-table-section"));
-    if (sections.length === 0) {
+    const now = Date.now();
+    const delta = Math.max(0, Math.floor((now - state.lastTickAt) / 1000));
+    if (delta < 1) {
+      return state;
+    }
+
+    state.remainingSeconds = Math.max(0, Number(state.remainingSeconds || 0) - delta);
+    state.elapsedSeconds = Number(state.elapsedSeconds || 0) + delta;
+    state.lastTickAt = now;
+
+    if (state.remainingSeconds <= 0) {
+      state.isRunning = false;
+      state.isPaused = false;
+      state.remainingSeconds = 0;
+    }
+
+    writeState(state, emit);
+    return state;
+  }
+
+  function formatTime(seconds) {
+    const safeSeconds = Math.max(0, Number(seconds || 0));
+    const minutes = Math.floor(safeSeconds / 60);
+    const secs = safeSeconds % 60;
+    return `${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+  }
+
+  async function postJson(url, method, payload) {
+    const response = await fetch(url, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      throw new Error(data.error || 'Timer save failed');
+    }
+    return data;
+  }
+
+  function sessionPayload(state, status, extras = {}) {
+    return Object.assign({
+      subjectID: state.currentSubject,
+      presetID: state.currentPresetID,
+      durationSeconds: Number(state.totalSeconds || 0),
+      timeSpentSeconds: Number(state.elapsedSeconds || 0),
+      status
+    }, extras);
+  }
+
+  async function createSession(state) {
+    const data = await postJson('/api/timer/sessions', 'POST', sessionPayload(state, 'in_progress'));
+    state.sessionID = data.sessionID;
+    writeState(state);
+    return state;
+  }
+
+  async function autosave(status = null, extras = {}) {
+    const state = deriveState();
+    if (!state.sessionID) {
+      return state;
+    }
+
+    const nextStatus = status || (state.isRunning ? 'in_progress' : state.isPaused ? 'paused' : 'completed');
+    await postJson(`/api/timer/sessions/${state.sessionID}`, 'PATCH', sessionPayload(state, nextStatus, extras));
+    state.lastAutosaveElapsed = Number(state.elapsedSeconds || 0);
+    writeState(state);
+    return state;
+  }
+
+  async function startTimer(subject = null) {
+    const state = deriveState();
+    if (subject) {
+      state.currentSubject = subject.subjectID || subject.currentSubject;
+      state.currentSubjectName = subject.subjectName || subject.currentSubjectName;
+    }
+
+    if (!state.currentSubject) {
+      window.location.href = '/timer';
+      return state;
+    }
+
+    state.isRunning = true;
+    state.isPaused = false;
+    state.lastTickAt = Date.now();
+    state.completedNotified = false;
+    if (!state.sessionID) {
+      await createSession(state);
+    }
+    writeState(state);
+    return state;
+  }
+
+  async function pauseTimer() {
+    const state = deriveState();
+    state.isRunning = false;
+    state.isPaused = true;
+    state.lastTickAt = null;
+    writeState(state);
+    await autosave('paused');
+    return state;
+  }
+
+  async function resetTimer(markAbandoned = true) {
+    const state = deriveState();
+    const shouldSaveAbandoned = markAbandoned && state.sessionID && Number(state.elapsedSeconds || 0) > 0;
+    state.isRunning = false;
+    state.isPaused = false;
+    state.remainingSeconds = Number(state.totalSeconds || DEFAULT_STATE.totalSeconds);
+    state.elapsedSeconds = 0;
+    state.lastTickAt = null;
+    state.lastAutosaveElapsed = 0;
+    state.completedNotified = false;
+
+    if (shouldSaveAbandoned) {
+      await autosave('abandoned', { endTime: true });
+    }
+
+    state.sessionID = null;
+    writeState(state);
+    return state;
+  }
+
+  async function completeTimer(notes = '') {
+    const state = deriveState();
+    state.isRunning = false;
+    state.isPaused = false;
+    state.remainingSeconds = 0;
+    state.lastTickAt = null;
+    writeState(state);
+    await autosave('completed', { notes, endTime: true });
+    state.completedNotified = true;
+    writeState(state);
+    return state;
+  }
+
+  function setPreset(preset) {
+    const state = deriveState();
+    state.currentPresetID = preset?.presetID || null;
+    state.currentPresetName = preset?.presetName || 'Custom Timer';
+    state.totalSeconds = Number(preset?.durationSeconds || DEFAULT_STATE.totalSeconds);
+    state.remainingSeconds = state.totalSeconds;
+    state.elapsedSeconds = 0;
+    state.isRunning = false;
+    state.isPaused = false;
+    state.sessionID = null;
+    state.lastTickAt = null;
+    state.lastAutosaveElapsed = 0;
+    state.completedNotified = false;
+    writeState(state);
+    return state;
+  }
+
+  function setSubject(subject) {
+    const state = deriveState();
+    state.currentSubject = subject?.subjectID || null;
+    state.currentSubjectName = subject?.subjectName || null;
+    writeState(state);
+    return state;
+  }
+
+  function setPopout(value) {
+    const state = deriveState();
+    state.popout = Boolean(value);
+    writeState(state);
+    return state;
+  }
+
+  function subscribe(listener) {
+    listeners.add(listener);
+    listener(deriveState());
+    return () => listeners.delete(listener);
+  }
+
+  window.DustyStudyTimer = {
+    getState: deriveState,
+    saveState: writeState,
+    subscribe,
+    formatTime,
+    startTimer,
+    pauseTimer,
+    resetTimer,
+    completeTimer,
+    autosave,
+    setPreset,
+    setSubject,
+    setPopout
+  };
+
+  function createWidget() {
+    if (document.getElementById('dustyTimerWidget')) {
       return;
     }
 
-    const taskTypes = ["Homework", "Exam", "Project", "Study", "Assignment", "Other"];
-    const taskTables = {};
-    let taskStatusTimeout = null;
+    const widget = document.createElement('section');
+    widget.id = 'dustyTimerWidget';
+    widget.className = 'dusty-timer-widget';
+    widget.innerHTML = `
+      <div class="dusty-widget-top">
+        <div>
+          <p class="dusty-widget-label" id="dustyWidgetPreset">Custom Timer</p>
+          <strong id="dustyWidgetTime">60:00</strong>
+          <span id="dustyWidgetSubject">No subject</span>
+        </div>
+        <button class="dusty-widget-close" type="button" id="dustyWidgetClose" aria-label="Hide timer">x</button>
+      </div>
+      <div class="dusty-widget-actions">
+        <button class="btn btn-secondary" type="button" id="dustyWidgetReset">Reset</button>
+        <button class="btn btn-primary" type="button" id="dustyWidgetToggle">Start</button>
+      </div>
+    `;
 
-    function showTaskStatus(message, type = "info") {
-      const el = document.getElementById("taskStatus");
-      if (!el) {
-        return;
-      }
-
-      if (taskStatusTimeout) {
-        clearTimeout(taskStatusTimeout);
-      }
-
-      el.textContent = message;
-      el.className = `status ${type}`;
-      el.style.display = "block";
-
-      const timeoutDuration = type === "error" ? 6000 : type === "success" ? 3000 : 4000;
-      taskStatusTimeout = setTimeout(() => hideTaskStatus(), timeoutDuration);
-    }
-
-    function hideTaskStatus() {
-      const el = document.getElementById("taskStatus");
-      if (!el) {
-        return;
-      }
-
-      el.classList.add("hiding");
-      setTimeout(() => {
-        el.style.display = "none";
-        el.classList.remove("hiding");
-      }, 300);
-
-      if (taskStatusTimeout) {
-        clearTimeout(taskStatusTimeout);
-        taskStatusTimeout = null;
-      }
-    }
-
-    function isIsoDate(value) {
-      const dateValue = String(value || "");
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
-        return false;
-      }
-
-      const [year, month, day] = dateValue.split("-").map(Number);
-      const date = new Date(year, month - 1, day);
-
-      return (
-        !Number.isNaN(date.getTime()) &&
-        date.getFullYear() === year &&
-        date.getMonth() === month - 1 &&
-        date.getDate() === day
-      );
-    }
-
-    function formatDateForGrid(value) {
-      if (!isIsoDate(value)) {
-        return value || "";
-      }
-
-      const [year, month, day] = value.split("-");
-      return `${day}/${month}/${year}`;
-    }
-
-    function normaliseDateValue(value) {
-      const raw = String(value || "").trim();
-      if (isIsoDate(raw)) {
-        return raw;
-      }
-
-      const slashMatch = raw.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-      if (!slashMatch) {
-        return "";
-      }
-
-      const day = slashMatch[1].padStart(2, "0");
-      const month = slashMatch[2].padStart(2, "0");
-      const year = slashMatch[3];
-      const iso = `${year}-${month}-${day}`;
-      return isIsoDate(iso) ? iso : "";
-    }
-
-    function isPastDate(isoDate) {
-      const selectedDate = new Date(`${isoDate}T00:00:00`);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      return selectedDate < today;
-    }
-
-    function formatLocalIsoDate(date) {
-      const year = date.getFullYear();
-      const month = String(date.getMonth() + 1).padStart(2, "0");
-      const day = String(date.getDate()).padStart(2, "0");
-      return `${year}-${month}-${day}`;
-    }
-
-    function calculateDaysRemaining(isoDate) {
-      const selectedDate = new Date(`${isoDate}T00:00:00`);
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-
-      const millisecondsPerDay = 24 * 60 * 60 * 1000;
-      return Math.max(0, Math.round((selectedDate - today) / millisecondsPerDay));
-    }
-
-    function getTaskProgressColor(params) {
-      const percent = Number(params.value?.toString().match(/\d+/)?.[0]);
-
-      if (isNaN(percent)) {
-        return { backgroundColor: "#777", color: "#fff" };
-      }
-
-      let r, g, b;
-
-      if (percent <= 50) {
-        const ratio = percent / 50;
-        r = 255;
-        g = Math.round(49 + (211 - 49) * ratio);
-        b = Math.round(49 + (89 - 49) * ratio);
+    document.body.appendChild(widget);
+    document.getElementById('dustyWidgetClose')?.addEventListener('click', () => setPopout(false));
+    document.getElementById('dustyWidgetToggle')?.addEventListener('click', async () => {
+      const state = deriveState();
+      if (state.isRunning) {
+        await pauseTimer();
       } else {
-        const ratio = (percent - 50) / 50;
-        r = Math.round(255 - (255 - 0) * ratio);
-        g = Math.round(211 + (191 - 211) * ratio);
-        b = Math.round(89 - (89 - 99) * ratio);
+        await startTimer();
       }
-
-      return {
-        backgroundColor: `rgb(${r}, ${g}, ${b})`,
-        color: percent > 60 ? "white" : "black",
-        fontWeight: "700"
-      };
-    }
-
-    async function setProgressValue(params) {
-      const progress = Number(String(params.newValue).replace("%", ""));
-      if (!Number.isInteger(progress) || progress < 0 || progress > 100) {
-        showTaskStatus("Status must be a whole number from 0 to 100", "error");
-        return false;
-      }
-
-      params.data.status = `${progress}%`;
-      
-      // Update in database
-      const success = await updateTask(params.data.taskID, 'status', `${progress}%`);
-      if (!success) {
-        return false; // Revert the change
-      }
-      
-      return true;
-    }
-
-    function setDaysValue(params) {
-      const daysRemaining = Number(params.newValue);
-      if (!Number.isInteger(daysRemaining) || daysRemaining < 0 || daysRemaining > 365) {
-        showTaskStatus("Time remaining must be a whole number from 0 to 365 days", "error");
-        return false;
-      }
-
-      params.data.time = daysRemaining;
-      return true;
-    }
-
-    async function setTypeValue(params) {
-      if (!taskTypes.includes(params.newValue)) {
-        showTaskStatus("Type must be selected from the dropdown options", "error");
-        return false;
-      }
-
-      params.data.type = params.newValue;
-      
-      // Update in database
-      const success = await updateTask(params.data.taskID, 'type', params.newValue);
-      if (!success) {
-        return false; // Revert the change
-      }
-      
-      return true;
-    }
-
-    async function setDateValue(params) {
-      const isoDate = normaliseDateValue(params.newValue);
-      if (!isoDate) {
-        showTaskStatus("Due date must be a valid date", "error");
-        return false;
-      }
-
-      if (isPastDate(isoDate)) {
-        showTaskStatus("Due date cannot be in the past", "error");
-        return false;
-      }
-
-      params.data.date = isoDate;
-      params.data.time = calculateDaysRemaining(isoDate);
-      
-      // Update in database
-      const success = await updateTask(params.data.taskID, 'date', isoDate);
-      if (!success) {
-        return false; // Revert the change
-      }
-      
-      params.api.refreshCells({ rowNodes: [params.node], columns: ["time"], force: true });
-      return true;
-    }
-
-    function createGridOptions(rowData) {
-      return {
-        defaultColDef: {
-          flex: 1,
-          minWidth: 135,
-          editable: true,
-          cellClass: "editable-cell",
-          resizable: true
-        },
-        columnTypes: {
-          trafficLight: {
-            cellClassRules: {
-              'cell-red': params => Number(params.value) <= 3,
-              'cell-yellow': params => {
-                const value = Number(params.value);
-                return value > 3 && value <= 7;
-              },
-              'cell-green': params => Number(params.value) > 7
-            },
-            valueFormatter: params => `${params.value} Days`
-          },
-          progressGradient: {
-            cellStyle: getTaskProgressColor
-          }
-        },
-        columnDefs: [
-          {
-            headerName: "Task",
-            field: "task",
-            cellClass: ["editable-cell", "editable-text-cell"],
-            valueSetter: async params => {
-              const value = String(params.newValue || "").trim();
-              if (!value) {
-                showTaskStatus("Task name cannot be empty", "error");
-                return false;
-              }
-
-              params.data.task = value;
-              
-              // Update in database
-              const success = await updateTask(params.data.taskID, 'task', value);
-              if (!success) {
-                return false; // Revert the change
-              }
-              
-              return true;
-            }
-          },
-          {
-            headerName: "Due Date",
-            field: "date",
-            cellEditor: "agDateStringCellEditor",
-            cellDataType: "dateString",
-            valueFormatter: params => formatDateForGrid(params.value),
-            valueSetter: setDateValue,
-            cellClass: ["editable-cell", "editable-date-cell"]
-          },
-          {
-            headerName: "Type",
-            field: "type",
-            cellEditor: "agSelectCellEditor",
-            cellEditorParams: { values: taskTypes },
-            valueSetter: setTypeValue,
-            cellClass: ["editable-cell", "editable-select-cell"]
-          },
-          {
-            headerName: "Status",
-            field: "status",
-            type: "progressGradient",
-            valueSetter: setProgressValue,
-            cellClass: ["editable-cell", "editable-number-cell"]
-          },
-          {
-            headerName: "Time Remaining",
-            field: "time",
-            editable: false,
-            type: "trafficLight",
-            comparator: (a, b) => Number(a) - Number(b),
-            cellClass: "calculated-cell"
-          }
-        ],
-        rowData,
-        stopEditingWhenCellsLoseFocus: true,
-        animateRows: true,
-        theme: agGrid.themeQuartz.withParams({
-          accentColor: "#F5761C",
-          backgroundColor: "#FFFFFF",
-          borderColor: "#000000",
-          borderRadius: 2,
-          borderWidth: 1,
-          browserColorScheme: "inherit",
-          cellHorizontalPaddingScale: 0.7,
-          chromeBackgroundColor: "#FFFFFF",
-          columnBorder: true,
-          fontFamily: 'Arial, sans-serif',
-          fontSize: 14,
-          foregroundColor: "#555B62",
-          headerBackgroundColor: "#FFFFFF",
-          headerFontSize: 16,
-          headerFontWeight: 600,
-          headerTextColor: "#000000",
-          oddRowBackgroundColor: "#FAFAFA",
-          rowBorder: true,
-          rowVerticalPaddingScale: 0.9,
-          sidePanelBorder: true,
-          spacing: 8,
-          wrapperBorder: true,
-          wrapperBorderRadius: 15
-        })
-      };
-    }
-
-    async function loadTasks() {
-      try {
-        const response = await fetch('/get_tasks');
-        if (!response.ok) {
-          throw new Error('Failed to fetch tasks');
-        }
-        const data = await response.json();
-        return data.tasks || [];
-      } catch (error) {
-        console.error('Error loading tasks:', error);
-        showTaskStatus('Failed to load tasks from database', 'error');
-        return [];
-      }
-    }
-
-    async function updateTask(taskID, field, value) {
-      try {
-        const response = await fetch('/update_task', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ taskID, field, value })
-        });
-        
-        if (!response.ok) {
-          const error = await response.json().catch(() => ({}));
-          throw new Error(error.error || 'Failed to update task');
-        }
-        
-        return true;
-      } catch (error) {
-        console.error('Error updating task:', error);
-        showTaskStatus(`Failed to update task: ${error.message}`, 'error');
-        return false;
-      }
-    }
-
-    async function populateGrids() {
-      const tasks = await loadTasks();
-      
-      // Group tasks by subjectID
-      const tasksBySubject = {};
-      tasks.forEach(task => {
-        const subjectKey = `subject-${task.subjectID}`;
-        if (!tasksBySubject[subjectKey]) {
-          tasksBySubject[subjectKey] = [];
-        }
-        tasksBySubject[subjectKey].push(task);
-      });
-
-      // Populate each grid with its tasks
-      Object.keys(taskTables).forEach(tableId => {
-        const grid = taskTables[tableId];
-        const subjectTasks = tasksBySubject[tableId] || [];
-        grid.setGridOption('rowData', subjectTasks);
-      });
-
-      // Hide loading screen after tasks are loaded
-      setTimeout(() => {
-        const loadingScreen = document.getElementById('tasks-loading');
-        if (loadingScreen) {
-          loadingScreen.classList.add('is-hidden');
-        }
-      }, 500);
-    }
-
-    sections.forEach((section, index) => {
-      const gridDiv = section.querySelector(".task-grid");
-      const tableId = gridDiv?.dataset.taskTableId || section.dataset.taskTableId;
-      if (!gridDiv || !tableId) {
-        return;
-      }
-
-      // Initialize grids with empty data, will be populated after loading
-      taskTables[tableId] = agGrid.createGrid(gridDiv, createGridOptions([]));
     });
+    document.getElementById('dustyWidgetReset')?.addEventListener('click', () => resetTimer(true));
+  }
 
-    // Load and populate tasks after grids are initialized
-    populateGrids();
-
-    function setDefaultDueDate(form) {
-      const dueDate = form.querySelector(".taskDueDate");
-      if (!dueDate) {
-        return;
-      }
-
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      const today = formatLocalIsoDate(new Date());
-      dueDate.min = today;
-      dueDate.value = formatLocalIsoDate(tomorrow);
+  function renderWidget(state) {
+    const widget = document.getElementById('dustyTimerWidget');
+    if (!widget) {
+      return;
     }
 
-    function clearFieldErrors(form) {
-      form?.querySelectorAll(".field-error").forEach(field => {
-        field.classList.remove("field-error");
-      });
+    widget.classList.toggle('is-visible', Boolean(state.popout));
+    document.getElementById('dustyWidgetPreset').textContent = state.currentPresetName || 'Custom Timer';
+    document.getElementById('dustyWidgetTime').textContent = formatTime(state.remainingSeconds);
+    document.getElementById('dustyWidgetSubject').textContent = state.currentSubjectName || 'No subject';
+    document.getElementById('dustyWidgetToggle').textContent = state.isRunning ? 'Pause' : 'Start';
+  }
+
+  const dustyAppPages = ['/home', '/timer', '/tasks', '/chat', '/calendar', '/flashcards', '/resources', '/progress'];
+
+  function isDustyAppPage() {
+    const normalizedPath = window.location.pathname.replace(/\/$/, '');
+    return dustyAppPages.some(page => normalizedPath === page || normalizedPath.startsWith(page + '/'));
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    if (!isDustyAppPage()) {
+      return;
     }
 
-    function openTaskForm(section) {
-      const formContainer = section.querySelector(".task-form");
-      const form = section.querySelector(".taskFormData");
-      if (!formContainer || !form) {
-        return;
-      }
-
-      form.reset();
-      clearFieldErrors(form);
-      setDefaultDueDate(form);
-      formContainer.style.display = "block";
-      formContainer.setAttribute("aria-hidden", "false");
-      section.querySelector(".taskTitle")?.focus();
-    }
-
-    function closeTaskForm(section) {
-      const formContainer = section.querySelector(".task-form");
-      const form = section.querySelector(".taskFormData");
-      if (!formContainer || !form) {
-        return;
-      }
-
-      formContainer.style.display = "none";
-      formContainer.setAttribute("aria-hidden", "true");
-      clearFieldErrors(form);
-    }
-
-    function flagField(field) {
-      field.classList.remove("field-error");
-      void field.offsetWidth;
-      field.classList.add("field-error");
-    }
-
-    function validateTaskForm(form) {
-      clearFieldErrors(form);
-
-      const title = form.querySelector(".taskTitle");
-      const dueDate = form.querySelector(".taskDueDate");
-      const type = form.querySelector(".taskType");
-      const status = form.querySelector(".taskStatusInput");
-      const subject = form.querySelector(".subjectID");
-      const fields = [title, dueDate, type, status, subject];
-      const invalidFields = fields.filter(field => !field || !field.value.trim());
-
-      invalidFields.forEach(flagField);
-      if (invalidFields.length > 0) {
-        showTaskStatus("Please fill in all required fields", "error");
-        invalidFields[0]?.focus();
-        return null;
-      }
-
-      const isoDate = normaliseDateValue(dueDate.value);
-      const progress = Number(status.value);
-
-      if (!isoDate || isPastDate(isoDate)) {
-        flagField(dueDate);
-        showTaskStatus(!isoDate ? "Please enter a valid due date" : "Due date cannot be in the past", "error");
-        dueDate.focus();
-        return null;
-      }
-
-      if (!taskTypes.includes(type.value)) {
-        flagField(type);
-        showTaskStatus("Please select a valid task type", "error");
-        type.focus();
-        return null;
-      }
-
-      if (!Number.isInteger(progress) || progress < 0 || progress > 100) {
-        flagField(status);
-        showTaskStatus("Status must be a whole number from 0 to 100", "error");
-        status.focus();
-        return null;
-      }
-
-      return {
-        task: title.value.trim(),
-        date: isoDate,
-        type: type.value,
-        status: `${progress}%`,
-        time: calculateDaysRemaining(isoDate),
-        savePayload: {
-          subjectID: subject.value,
-          taskTitle: title.value.trim(),
-          taskDueDate: isoDate,
-          taskType: type.value,
-          taskStatusInput: progress
-        }
-      };
-    }
-
-    sections.forEach(section => {
-      const openButton = section.querySelector(".new-task-btn");
-      const formContainer = section.querySelector(".task-form");
-      const form = section.querySelector(".taskFormData");
-      const closeBtn = section.querySelector(".closeTaskBtn");
-      const cancelBtn = section.querySelector(".cancelTaskBtn");
-
-      openButton?.addEventListener("click", () => openTaskForm(section));
-      closeBtn?.addEventListener("click", () => closeTaskForm(section));
-      cancelBtn?.addEventListener("click", () => closeTaskForm(section));
-
-      form?.addEventListener("submit", async event => {
-        event.preventDefault();
-        const task = validateTaskForm(form);
-        if (!task) {
-          return;
-        }
-
-        const tableId = section.dataset.taskTableId;
-        const targetGrid = taskTables[tableId];
-        if (!targetGrid) {
-          showTaskStatus("Could not find the selected task table", "error");
-          return;
-        }
-
-        try {
-          const response = await fetch(form.action, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(task.savePayload)
-          });
-
-          const result = await response.json().catch(() => ({}));
-          if (!response.ok) {
-            showTaskStatus(result.error || "Could not save task", "error");
-            return;
-          }
-
-          delete task.savePayload;
-          task.taskID = result.taskID;
-          task.time = result.daysRemaining;
-
-          // Reload all tasks to ensure grids are in sync
-          await populateGrids();
-          closeTaskForm(section);
-          showTaskStatus("Task saved successfully", "success");
-        } catch (error) {
-          showTaskStatus("Could not save task. Please try again.", "error");
-        }
-      });
-    });
+    createWidget();
+    subscribe(renderWidget);
   });
+
+  setInterval(async () => {
+    const state = deriveState(true);
+    if (state.isRunning && state.sessionID && Number(state.elapsedSeconds || 0) - Number(state.lastAutosaveElapsed || 0) >= AUTOSAVE_SECONDS) {
+      try {
+        await autosave('in_progress');
+      } catch (error) {
+        console.error('Timer autosave failed:', error);
+      }
+    }
+
+    if (!state.isRunning && state.remainingSeconds === 0 && state.sessionID && !state.completedNotified) {
+      try {
+        const completedState = await completeTimer('');
+        listeners.forEach(listener => listener(Object.assign({}, completedState, { justCompleted: true })));
+      } catch (error) {
+        console.error('Timer completion save failed:', error);
+      }
+    }
+  }, 1000);
 })();
+
+// Preferences Modal Management
+const SUBJECTS = [
+    { key: 'biology',       label: 'Biology',               defaultColour: 'green' },
+    { key: 'chemistry',     label: 'Chemistry',             defaultColour: 'blue' },
+    { key: 'physics',       label: 'Physics',               defaultColour: 'purple' },
+    { key: 'ext2_math',     label: 'Extension 2 Maths',     defaultColour: 'red' },
+    { key: 'ext1_math',     label: 'Extension 1 Maths',     defaultColour: 'orange' },
+    { key: 'advanced_math', label: 'Mathematics Advanced',  defaultColour: 'yellow' },
+    { key: 'eng_adv',       label: 'English Advanced',      defaultColour: 'brown' },
+    { key: 'eng_std',       label: 'English Standard',      defaultColour: 'brown' },
+    { key: 'software_eng',  label: 'Software Engineering',  defaultColour: 'blue' },
+    { key: 'economics',     label: 'Economics',             defaultColour: 'green' },
+    { key: 'legal',         label: 'Legal Studies',         defaultColour: 'purple' },
+    { key: 'history',       label: 'Modern History',        defaultColour: 'red' },
+];
+ 
+const COLOURS = {
+    orange: { hex: '#f5761c', rgb: '245,118,28', label: 'Orange' },
+    blue:   { hex: '#2563eb', rgb: '37,99,235',  label: 'Blue' },
+    green:  { hex: '#15803d', rgb: '21,128,61',  label: 'Green' },
+    red:    { hex: '#dc2626', rgb: '220,38,38',  label: 'Red' },
+    purple: { hex: '#7c3aed', rgb: '124,58,237', label: 'Purple' },
+    yellow: { hex: '#d97706', rgb: '217,119,6',  label: 'Amber' },
+    brown:  { hex: '#92400e', rgb: '146,64,14',  label: 'Brown' },
+    teal:   { hex: '#0891b2', rgb: '8,145,178',  label: 'Teal' },
+    pink:   { hex: '#be185d', rgb: '190,24,93',  label: 'Pink' },
+};
+
+const prefsState = {
+    selected: new Set(),
+    colours: {}
+};
+
+function openPrefsModal() {
+    // Use setTimeout to ensure popup is fully removed before showing modal
+    setTimeout(() => {
+        const modal = document.getElementById('prefsModal');
+        if (modal) {
+            modal.classList.remove('hidden');
+            // Reset to first step
+            document.getElementById('stepPanel0')?.classList.add('visible');
+            document.getElementById('stepPanel1')?.classList.remove('visible');
+            document.getElementById('step0')?.classList.add('active');
+            document.getElementById('step0')?.classList.remove('done');
+            document.getElementById('step1')?.classList.remove('active');
+            document.getElementById('step1')?.classList.remove('done');
+            // Load subjects and build grid
+            loadSignupSubjects().then(() => {
+                prefsState.selected.clear();
+                prefsState.colours = {};
+                buildSubjectGrid();
+            }).catch(err => {
+                console.error('Failed to load subjects for preferences modal:', err);
+                showPopup('Error', 'Could not load subjects. Please try again.');
+            });
+        }
+    }, 50);
+}
+
+function closePrefsModal() {
+    const modal = document.getElementById('prefsModal');
+    if (modal) {
+        modal.classList.add('hidden');
+    }
+}
+
+async function loadSignupSubjects() {
+  try {
+    const res = await fetch('/api/subjects');
+    const data = await res.json();
+    if (res.ok && Array.isArray(data.subjects)) {
+      // Map to expected lightweight shape used in prefs modal
+      window.signupSubjects = data.subjects.map(s => ({
+        subjectID: s.subjectID,
+        subjectKey: String(s.subjectID),
+        subjectName: s.subjectName,
+        colourScheme: s.colourScheme || 'orange'
+      }));
+      return window.signupSubjects;
+    }
+  } catch (e) {
+    console.error('Could not fetch /api/subjects for signup modal', e);
+  }
+  // Fallback to built-in SUBJECTS list
+  window.signupSubjects = SUBJECTS.map(s => ({ subjectKey: s.key, subjectName: s.label, colourScheme: s.defaultColour }));
+  return window.signupSubjects;
+}
+
+function buildSubjectGrid() {
+    const grid = document.getElementById('subjectPresetGrid');
+    grid.innerHTML = SUBJECTS.map(s => {
+        const col = COLOURS[s.defaultColour] || COLOURS.orange;
+        return `
+            <button class="subject-preset-btn" type="button"
+                    data-key="${s.key}"
+                    style="--subj-col:${col.hex};--subj-col-rgb:${col.rgb}"
+                    onclick="toggleSubject(this, '${s.key}', '${s.defaultColour}')">
+                <span class="subj-check"></span>
+                <span>${s.label}</span>
+                <span class="subj-colour-dot"></span>
+            </button>`;
+    }).join('');
+}
+
+function toggleSubject(btn, key, defaultColour) {
+    if (prefsState.selected.has(key)) {
+        prefsState.selected.delete(key);
+        delete prefsState.colours[key];
+        btn.classList.remove('selected');
+    } else {
+        prefsState.selected.add(key);
+        prefsState.colours[key] = defaultColour;
+        btn.classList.add('selected');
+    }
+    /* Update button icon */
+    btn.querySelector('.subj-check').textContent = prefsState.selected.has(key) ? '✓' : '';
+    /* Enable/disable next button */
+    document.getElementById('nextStepBtn').disabled = prefsState.selected.size === 0;
+}
+
+function goToStep2() {
+    if (prefsState.selected.size === 0) return;
+    buildColourAssignments();
+    setStep(1);
+}
+ 
+function goToStep1() { setStep(0); }
+ 
+function setStep(n) {
+    [0,1].forEach(i => {
+        document.getElementById(`stepPanel${i}`).classList.toggle('visible', i === n);
+        document.getElementById(`step${i}`).className = 'prefs-step' + (i < n ? ' done' : i === n ? ' active' : '');
+    });
+}
+
+function buildColourAssignments() {
+    const wrap = document.getElementById('colourAssignments');
+    const selectedSubjects = SUBJECTS.filter(s => prefsState.selected.has(s.key));
+ 
+    wrap.innerHTML = selectedSubjects.map(s => {
+        const swatches = Object.entries(COLOURS).map(([key, c]) => {
+            const isActive = prefsState.colours[s.key] === key;
+            return `<div class="colour-swatch ${isActive ? 'active' : ''}"
+                        style="background:${c.hex}"
+                        title="${c.label}"
+                        onclick="pickColour('${s.key}', '${key}', this)"></div>`;
+        }).join('');
+ 
+        return `
+            <div class="colour-row" id="crow-${s.key}">
+                <span class="colour-row-name">${s.label}</span>
+                <div class="colour-swatches">${swatches}</div>
+            </div>`;
+    }).join('');
+}
+
+function pickColour(subjectKey, colourKey, swatchEl) {
+    prefsState.colours[subjectKey] = colourKey;
+    /* Deactivate all swatches in this row, activate picked one */
+    const row = swatchEl.closest('.colour-row');
+    row.querySelectorAll('.colour-swatch').forEach(s => s.classList.remove('active'));
+    swatchEl.classList.add('active');
+}
+
+async function savePreferences() {
+    const btn = document.getElementById('savePrefsBtn');
+      if (btn) btn.disabled = true;
+      
+      if (prefsState.selected.size === 0) {
+          showPopup('No Subjects', 'Please select at least one subject.');
+          if (btn) btn.disabled = false;
+          return;
+      }
+    
+    try {
+        const payload = {
+            subjects: Array.from(prefsState.selected).map(subjectKey => {
+                const subject = SUBJECTS.find(s => s.key === subjectKey);
+                return {
+                    subjectKey,
+                    subjectName: subject ? subject.label : subjectKey,
+                    colourScheme: prefsState.colours[subjectKey] || 'orange'
+                };
+            })
+        };
+
+        const response = await fetch('/api/user/preferences', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        const data = await response.json().catch(() => ({}));
+
+        if (response.ok && data.success) {
+            const signupSubjects = window.signupSubjects || [];
+            const colourMap = {};
+            signupSubjects.forEach(s => {
+                if (prefsState.selected.has(String(s.subjectID || s.subjectKey))) {
+                    colourMap[s.subjectName] = prefsState.colours[String(s.subjectID || s.subjectKey)] || s.colourScheme || 'orange';
+                }
+            });
+            localStorage.setItem('dusty.subjectColours', JSON.stringify(colourMap));
+            window.location.href = '/home';
+            return;
+        } else {
+            showPopup('Preferences Error', data.error || 'Could not save preferences. Please try again.');
+            if (btn) btn.disabled = false;
+        }
+    } catch (err) {
+        console.error('[Preferences] Save error:', err);
+        showPopup('Network Error', 'Unable to save preferences right now. Please try again.');
+        if (btn) btn.disabled = false;
+    }
+}
+
+function skipPrefs() {
+    window.location.href = '/home';
+}

@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS "google_creds" (
 	"refreshToken" TEXT,
 	"expiry" TEXT,
 	"expiresAt" INTEGER,
+	"calendarID" TEXT DEFAULT 'primary',
+	"syncToken" TEXT,
 	FOREIGN KEY("userID") REFERENCES "users"("userID") ON DELETE CASCADE
 );
 
@@ -70,6 +72,99 @@ CREATE TABLE IF NOT EXISTS "schedules" (
 	"title" TEXT,
 	"isActive" BOOLEAN DEFAULT 1,
 	"createdAt" DATETIME DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY("userID") REFERENCES "users"("userID") ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS "timer_presets" (
+	"presetID" INTEGER PRIMARY KEY AUTOINCREMENT,
+	"userID" INTEGER NOT NULL,
+	"presetName" TEXT NOT NULL,
+	"durationSeconds" INTEGER NOT NULL,
+	"description" TEXT,
+	"isDefault" BOOLEAN DEFAULT 0,
+	"createdAt" DATETIME DEFAULT CURRENT_TIMESTAMP,
+	"updatedAt" DATETIME DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY("userID") REFERENCES "users"("userID") ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS "timer_sessions" (
+	"sessionID" INTEGER PRIMARY KEY AUTOINCREMENT,
+	"userID" INTEGER NOT NULL,
+	"subjectID" INTEGER NOT NULL,
+	"presetID" INTEGER,
+	"durationSeconds" INTEGER NOT NULL,
+	"timeSpentSeconds" INTEGER NOT NULL DEFAULT 0,
+	"status" TEXT DEFAULT 'completed' CHECK("status" IN ('in_progress', 'paused', 'completed', 'abandoned')),
+	"notes" TEXT,
+	"startTime" DATETIME DEFAULT CURRENT_TIMESTAMP,
+	"endTime" DATETIME,
+	"createdAt" DATETIME DEFAULT CURRENT_TIMESTAMP,
+	"updatedAt" DATETIME DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY("userID") REFERENCES "users"("userID") ON DELETE CASCADE,
+	FOREIGN KEY("subjectID") REFERENCES "subjects"("subjectID") ON DELETE CASCADE,
+	FOREIGN KEY("presetID") REFERENCES "timer_presets"("presetID") ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS "flashcard_decks" (
+	"deckID" INTEGER PRIMARY KEY AUTOINCREMENT,
+	"userID" INTEGER NOT NULL,
+	"title" TEXT NOT NULL,
+	"subject" TEXT NOT NULL DEFAULT 'General',
+	"module" TEXT NOT NULL DEFAULT 'General',
+	"cardCount" INTEGER NOT NULL DEFAULT 0,
+	"createdAt" TEXT NOT NULL DEFAULT (datetime('now')),
+	"updatedAt" TEXT NOT NULL DEFAULT (datetime('now')),
+	FOREIGN KEY("userID") REFERENCES "users"("userID") ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS "flashcards" (
+	"cardID" INTEGER PRIMARY KEY AUTOINCREMENT,
+	"deckID" INTEGER NOT NULL,
+	"userID" INTEGER NOT NULL,
+	"question" TEXT NOT NULL,
+	"answer" TEXT NOT NULL,
+	"hint" TEXT,
+	"sortOrder" INTEGER NOT NULL DEFAULT 0,
+	"createdAt" TEXT NOT NULL DEFAULT (datetime('now')),
+	FOREIGN KEY("deckID") REFERENCES "flashcard_decks"("deckID") ON DELETE CASCADE,
+	FOREIGN KEY("userID") REFERENCES "users"("userID") ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS "flashcard_results" (
+	"resultID" INTEGER PRIMARY KEY AUTOINCREMENT,
+	"deckID" INTEGER NOT NULL,
+	"userID" INTEGER NOT NULL,
+	"knew" INTEGER NOT NULL DEFAULT 0,
+	"unsure" INTEGER NOT NULL DEFAULT 0,
+	"missed" INTEGER NOT NULL DEFAULT 0,
+	"totalCards" INTEGER NOT NULL DEFAULT 0,
+	"studiedAt" TEXT NOT NULL DEFAULT (datetime('now')),
+	FOREIGN KEY("deckID") REFERENCES "flashcard_decks"("deckID") ON DELETE CASCADE,
+	FOREIGN KEY("userID") REFERENCES "users"("userID") ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS "chat_sessions" (
+	"sessionID" INTEGER PRIMARY KEY AUTOINCREMENT,
+	"userID" INTEGER NOT NULL,
+	"title" TEXT NOT NULL DEFAULT 'Untitled Chat',
+	"subject" TEXT DEFAULT 'General',
+	"module" TEXT DEFAULT 'General',
+	"messageCount" INTEGER DEFAULT 0,
+	"createdAt" DATETIME DEFAULT CURRENT_TIMESTAMP,
+	"updatedAt" DATETIME DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY("userID") REFERENCES "users"("userID") ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS "chat_messages" (
+	"messageID" INTEGER PRIMARY KEY AUTOINCREMENT,
+	"sessionID" INTEGER NOT NULL,
+	"userID" INTEGER NOT NULL,
+	"role" TEXT NOT NULL CHECK("role" IN ('user', 'assistant')),
+	"mode" TEXT DEFAULT 'tutor',
+	"content" TEXT NOT NULL,
+	"sources" TEXT,
+	"createdAt" DATETIME DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY("sessionID") REFERENCES "chat_sessions"("sessionID") ON DELETE CASCADE,
 	FOREIGN KEY("userID") REFERENCES "users"("userID") ON DELETE CASCADE
 );
 

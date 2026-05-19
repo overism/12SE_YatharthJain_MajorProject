@@ -1,34 +1,168 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Dashboard - Gamify</title>
-        <link rel="icon" href="{{ url_for('static', filename='images/mainicon.png') }}">
-        <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-        <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
-    </head>
-    <script>
-        if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js')
-            .then(() => console.log('SW registered'))
-            .catch(err => console.error('SW failed', err));
-        }
-    </script>
-    <body>
-        <sidebar class="sidebar" role="banner">
-            <a class="brand" href="{{ url_for('home') }}" aria-label="Gamify home">
-                <img src="{{ url_for('static', filename='images/transp512.png') }}" alt="Gamify logo">
-            </a>
-            <nav class="nav" role="navigation" aria-label="Auth pages">
-                <a class="btn btn-ghost" href="{{ url_for('home') }}">Dashboard</a>
-                <a class="btn btn-ghost" href="{{ url_for('calendar') }}">Smart Calendar</a>
-                <a class="btn btn-ghost" href="{{ url_for('tasks') }}">Tasks</a>
-                <a class="btn btn-ghost" href="{{ url_for('timer') }}">Study Timer</a>
-                <a class="btn btn-active" href="{{ url_for('chat') }}">AI Assistant</a>
-                <a class="btn btn-ghost" href="{{ url_for('flashcards') }}">Flashcards</a>
-                <a class="btn btn-ghost" href="{{ url_for('progress') }}">Progress</a>
-                <a class="btn btn-ghost" href="{{ url_for('resources') }}">Resources</a>
-            </nav>
-        </sidebar>
-        
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>AI Assistant - Dusty</title>
+    <link rel="icon" href="{{ url_for('static', filename='images/mainicon.png') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
+    <script defer src="{{ url_for('static', filename='js/subject-colours.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/dusty.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/chat.js') }}"></script>
+</head>
+<body>
+
+<sidebar class="sidebar" role="banner">
+    <a class="brand" href="{{ url_for('home') }}" aria-label="Dusty home">
+        <img src="{{ url_for('static', filename='images/transp512.png') }}" alt="Dusty logo">
+    </a>
+    <nav class="nav" role="navigation" aria-label="Study pages">
+        <a class="btn btn-ghost" href="{{ url_for('home') }}">Dashboard</a>
+        <a class="btn btn-ghost" href="{{ url_for('calendar') }}">Smart Calendar</a>
+        <a class="btn btn-ghost" href="{{ url_for('tasks') }}">Tasks</a>
+        <a class="btn btn-ghost" href="{{ url_for('timer') }}">Study Timer</a>
+        <a class="btn btn-active" href="{{ url_for('chat') }}">AI Assistant</a>
+        <a class="btn btn-ghost" href="{{ url_for('flashcards') }}">Flashcards</a>
+        <a class="btn btn-ghost" href="{{ url_for('progress') }}">Progress</a>
+        <a class="btn btn-ghost" href="{{ url_for('resources') }}">Resources</a>
+    </nav>
+</sidebar>
+
+<!-- ══ PAGE SHELL ══ -->
+<div class="chat-container">
+
+    <!-- HEADER -->
+    <header class="chat-header">
+        <div class="chat-header-left">
+            <h1 class="chat-title">AI Assistant</h1>
+            <p class="chat-subtitle">HSC tutoring, feedback, practice questions and quizzes — powered by your resources.</p>
+        </div>
+        <div class="chat-header-actions">
+            <div class="kb-status" id="kbStatus">
+                <span class="kb-dot"></span>
+                <span id="kbStatusText">Checking…</span>
+            </div>
+            <button class="btn btn-secondary" id="ingestBtn" type="button">⟳ Rebuild KB</button>
+            <button class="btn btn-secondary" id="newChatBtn"  type="button">+ New Chat</button>
+        </div>
+    </header>
+
+    <!-- WORKSPACE -->
+    <div class="chat-workspace">
+
+        <!-- CHAT HISTORY SIDEBAR -->
+        <aside class="chat-history-panel">
+            <div class="chat-history-header">
+                <h3>Chat History</h3>
+                <button class="btn-icon" id="toggleHistoryBtn" type="button" title="Collapse chat history">⌄</button>
+            </div>
+            <div class="chat-history-list" id="chatHistoryList">
+                <p class="chat-history-empty">No chats yet. Start a new conversation!</p>
+            </div>
+        </aside>
+
+        <!-- LEFT: Controls -->
+        <aside class="ctrl-panel">
+
+            <div class="ctrl-group">
+                <label class="ctrl-label" for="subjectSelect">HSC Course</label>
+                <select id="subjectSelect" class="ctrl-select">
+                    <option>Software Engineering</option>
+                    <option>English Advanced</option>
+                    <option>Mathematics Advanced</option>
+                    <option>Chemistry</option>
+                    <option>General</option>
+                </select>
+            </div>
+
+            <div class="ctrl-group">
+                <label class="ctrl-label" for="moduleInput">Module / Topic</label>
+                <input id="moduleInput" class="ctrl-input" type="text" value="General" maxlength="80" placeholder="e.g. Module A, Calculus">
+            </div>
+
+            <div class="ctrl-group">
+                <label class="ctrl-label" for="difficultySelect">Difficulty</label>
+                <select id="difficultySelect" class="ctrl-select">
+                    <option value="easy">Easy</option>
+                    <option value="medium" selected>Medium</option>
+                    <option value="hard">Hard</option>
+                    <option value="band6">Band 6</option>
+                </select>
+            </div>
+
+            <div class="ctrl-group">
+                <span class="ctrl-label">Mode</span>
+                <div class="mode-grid">
+                    <button class="mode-btn active" data-mode="tutor"    type="button"><span class="mode-icon">💬</span>Tutor</button>
+                    <button class="mode-btn"        data-mode="feedback" type="button"><span class="mode-icon">📝</span>Feedback</button>
+                    <button class="mode-btn"        data-mode="generate" type="button"><span class="mode-icon">🎯</span>Question</button>
+                    <button class="mode-btn"        data-mode="quiz"     type="button"><span class="mode-icon">🏆</span>Quiz</button>
+                </div>
+            </div>
+
+            <div class="ctrl-group" id="quizCountGroup" style="display:none">
+                <label class="ctrl-label" for="questionCount">Questions</label>
+                <input id="questionCount" class="ctrl-input" type="number" min="3" max="10" value="5">
+            </div>
+
+            <div class="ctrl-group">
+                <span class="ctrl-label">Quick Prompts</span>
+                <div class="quick-prompts">
+                    <button type="button" data-prompt="Explain this syllabus dot point in simple terms: ">Explain a dot point</button>
+                    <button type="button" data-prompt="Give me feedback and estimate the band for this response: ">Mark my response</button>
+                    <button type="button" data-prompt="Generate an HSC-style question with marking guidelines for: ">Practice question</button>
+                    <button type="button" data-prompt="What are the most common mistakes students make with: ">Common mistakes</button>
+                </div>
+            </div>
+
+        </aside>
+
+        <!-- CENTRE: Conversation -->
+        <section class="chat-main">
+
+            <div class="messages" id="messages">
+                <article class="message assistant">
+                    <div class="msg-av">D</div>
+                    <div class="msg-bubble">
+                        <strong>Ready when you are.</strong>
+                        <p>Ask any HSC question, paste a response for band feedback, generate an exam question, or switch to Quiz mode.</p>
+                    </div>
+                </article>
+            </div>
+
+            <!-- Quiz interactive area -->
+            <div class="quiz-area hidden" id="quizArea" aria-live="polite"></div>
+
+            <!-- Composer -->
+            <form class="composer" id="chatForm" autocomplete="off">
+                <textarea
+                    id="questionInput"
+                    rows="3"
+                    placeholder="Ask Dusty about any HSC topic…"
+                    aria-label="Your message"
+                ></textarea>
+                <div class="composer-footer">
+                    <span class="composer-hint" id="composerHint">Tutor mode — scaffolded HSC guidance</span>
+                    <button class="btn btn-primary" id="sendBtn" type="submit">Send</button>
+                </div>
+            </form>
+
+        </section>
+
+        <!-- RIGHT: Sources -->
+        <aside class="sources-panel">
+            <h2 class="sources-heading">Sources</h2>
+            <div id="sourcesList" class="sources-list">
+                <p class="sources-empty">Retrieved citations appear here after each response.</p>
+            </div>
+        </aside>
+
+    </div>
+</div>
+
+<div id="statusToast" class="status-toast" role="status" aria-live="polite"></div>
+
+</body>
+</html>

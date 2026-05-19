@@ -1,151 +1,565 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Profile - Gamify</title>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Profile - Dusty</title>
     <link rel="icon" href="{{ url_for('static', filename='images/mainicon.png') }}">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/profilestyle.css') }}">
-  </head>
-  <script>
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/static/sw.js')
-        .then(() => console.log('SW registered'))
-        .catch(err => console.error('SW failed', err));
-    }
-  </script>
-  <body>
-    <header class="topbar" role="banner">
-      <a href="{{ url_for('home') }}"><div class="brand"><img src="{{ url_for('static', filename='images/GAMIFY_LOGO.png') }}" alt="Gamify logo" width="150px"></div></a>
-      <nav class="nav" role="navigation" aria-label="Auth pages">
-        <a class="btn btn-ghost" href="{{ url_for('login') }}">Sign In</a>
-        <a class="btn btn-ghost" href="{{ url_for('signup') }}">Sign Up</a>
-        <a class="btn btn-primary" href="{{ url_for('home') }}">Home</a>
-      </nav>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}">
+</head>
+<body>
+    <script defer src="{{ url_for('static', filename='js/subject-colours.js') }}"></script>
+<div id="toast" class="status-toast"></div>
+
+<!-- Data container for JavaScript -->
+<script id="profileUserData" type="application/json">
+{{ {
+    'username': user.userName,
+    'email': user.userEmail,
+    'bio': user.userBio or '',
+    'userSettings': user.userSettings or '{}'
+} | tojson }}
+</script>
+
+<!-- Avatar Upload Modal -->
+<div class="modal-overlay hidden" id="avatarModal">
+    <div class="modal-box">
+        <h2 class="modal-title">📷 Change Profile Picture</h2>
+        <form id="avatarForm" method="POST" action="/upload-avatar" enctype="multipart/form-data">
+            <label class="file-drop" for="avatarFileInput">
+                <div class="file-drop-icon">🖼</div>
+                <p><strong>Click to choose</strong> or drag & drop</p>
+                <p style="font-size:12px;margin-top:4px">PNG, JPG or GIF · max 5 MB</p>
+                <input type="file" id="avatarFileInput" name="avatar" accept="image/*" onchange="previewAvatar(event)">
+            </label>
+            <div id="avatarPreviewWrap" style="display:none;margin-top:12px;text-align:center">
+                <img id="avatarPreview" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid rgba(245,118,28,.3)">
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-outline" onclick="closeAvatarModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary" id="avatarUploadBtn" disabled>Upload</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Delete Account Confirm Modal -->
+<div class="modal-overlay hidden" id="deleteModal">
+    <div class="modal-box">
+        <h2 class="modal-title" style="color:#dc2626">⚠️ Delete Account</h2>
+        <p style="font-size:14px;color:#555;margin:0 0 18px;line-height:1.6">
+            This will permanently delete your account, all tasks, timer sessions, flashcard decks and study data.
+            <strong style="color:#dc2626">This cannot be undone.</strong>
+        </p>
+        <div class="form-row" style="margin-bottom:16px">
+            <label class="form-label">Type <strong>DELETE</strong> to confirm</label>
+            <input id="deleteConfirmInput" class="form-input" type="text" placeholder="DELETE" autocomplete="off">
+        </div>
+        <div class="modal-actions">
+            <button class="btn btn-outline" onclick="closeDeleteModal()">Cancel</button>
+            <button class="btn btn-danger" id="confirmDeleteBtn" onclick="confirmDelete()">Delete My Account</button>
+        </div>
+    </div>
+</div>
+
+<!-- Preferences Modal -->
+<div class="modal-overlay hidden" id="prefsModal">
+    <div class="modal-box">
+        <h2 class="modal-title">Preferences</h2>
+        <form id="prefsFormProfile">
+            <div style="margin-bottom:12px">
+                <label style="display:block;font-weight:700;margin-bottom:6px">Theme</label>
+                <label style="margin-right:12px"><input type="radio" name="theme" value="light"> Light</label>
+                <label><input type="radio" name="theme" value="dark"> Dark</label>
+            </div>
+            <div style="margin-bottom:8px">
+                <label style="display:block;font-weight:700;margin-bottom:6px">Your subjects</label>
+                <div id="prefsSubjectsProfile" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-outline" onclick="closePrefsModal()">Cancel</button>
+                <button type="submit" class="btn btn-primary">Save</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<sidebar class="sidebar" role="banner">
+    <a class="brand" href="{{ url_for('home') }}" aria-label="Dusty home">
+        <img src="{{ url_for('static', filename='images/transp512.png') }}" alt="Dusty logo">
+    </a>
+    <nav class="nav" role="navigation" aria-label="Study pages">
+        <a class="btn btn-ghost" href="{{ url_for('home') }}">Dashboard</a>
+        <a class="btn btn-ghost" href="{{ url_for('calendar') }}">Smart Calendar</a>
+        <a class="btn btn-ghost" href="{{ url_for('tasks') }}">Tasks</a>
+        <a class="btn btn-ghost" href="{{ url_for('timer') }}">Study Timer</a>
+        <a class="btn btn-ghost" href="{{ url_for('chat') }}">AI Assistant</a>
+        <a class="btn btn-ghost" href="{{ url_for('flashcards') }}">Flashcards</a>
+        <a class="btn btn-ghost" href="{{ url_for('progress') }}">Progress</a>
+        <a class="btn btn-ghost" href="{{ url_for('resources') }}">Resources</a>
+    </nav>
+</sidebar>
+
+<div class="profile-container">
+
+    <!-- HEADER -->
+    <header class="profile-header">
+        <div>
+            <h1 class="profile-title">Profile</h1>
+            <p class="profile-header-sub">Manage your account and study settings.</p>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+            <a class="btn btn-ghost" href="{{ url_for('home') }}">← Dashboard</a>
+            <button class="btn btn-ghost" type="button" onclick="openPrefsModal()">⚙ Preferences</button>
+            <a class="btn btn-secondary" href="{{ url_for('logout') }}">Log out</a>
+        </div>
     </header>
 
-    <main class="wrap" role="main" aria-labelledby="profileTitle">
-      <div class="glow" aria-hidden="true"></div>
+    <div class="profile-inner">
 
-      <section class="card" id="profileCard" aria-labelledby="profileTitle">
-        <!-- Avatar Section -->
-        <div class="avatar-wrap" aria-hidden="true">
-          <img id="profileAvatar" src="{{ user.userPfp }}" alt="Avatar">
-        </div>
-
-        <div class="hero" id="profileContent">
-          <div class="hero-row">
-            <div class="username" aria-live="polite">
-              <h1 id="displayName" style="text-align: left;">{{ user.userName }}</h1>
-              <p id="displayEmail">{{ user.userEmail }}</p>
+        <!-- ── AVATAR + NAME HERO ── -->
+        <div class="p-card">
+            <div class="avatar-hero">
+                <div class="avatar-ring">
+                    <div class="avatar-img" id="avatarDisplay">
+                        {% if user.userPfp %}
+                            <img src="{{ user.userPfp }}" alt="Avatar" id="avatarImgEl">
+                        {% else %}
+                            <span id="avatarInitial">{{ user.userName[0].upper() }}</span>
+                        {% endif %}
+                    </div>
+                    <button class="avatar-change-btn" title="Change avatar" onclick="openAvatarModal()">✏️</button>
+                </div>
+                <div class="avatar-info">
+                    <h2 id="displayName">{{ user.userName }}</h2>
+                    <p id="displayEmail">{{ user.userEmail }}</p>
+                    <div class="avatar-info-meta">
+                        <span class="meta-badge">HSC Student</span>
+                        <span class="meta-badge" id="subjectCountBadge">Loading subjects…</span>
+                        <span class="meta-badge" id="taskCountBadge">Loading tasks…</span>
+                    </div>
+                </div>
             </div>
-          </div>
+        </div>
 
-            <!-- Bio Editor -->
-          <div class="line" style="flex-direction:column;align-items:flex-start;gap:8px;">
-            <div class="label" style="margin: 40px 0px 0px 0px; font-size:22px; letter-spacing:0.2px;">Bio - A little bit about yourself</div>
-            <textarea id="bioEditor" class="bio-editor" placeholder="Write a short bio..." style="resize: none; margin: 10px 0px">{{ user.userBio }}</textarea>
-            <div style="display:flex;gap:8px;margin-top:6px;">
-              <button id="saveBio" class="btn btn-primary">Save bio</button>
-              <button id="resetBio" class="btn btn-ghost">Reset</button>
-              <div id="bioStatus" style="margin-left:8px;color:var(--muted);align-self:center;font-size:13px"></div>
+        <!-- ── STUDY STATS ── -->
+        <div class="p-card">
+            <div class="p-card-head">
+                <div class="p-card-title"><span class="p-card-bar"></span>Study Overview</div>
+                <a class="btn btn-outline" href="{{ url_for('progress') }}" style="font-size:12px;padding:6px 14px">View Progress →</a>
             </div>
-          </div>
+            <div class="p-card-body">
+                <div class="stats-row" id="statsRow">
+                    <div class="stat-tile"><div class="shimmer" style="height:36px;margin-bottom:6px"></div><span>Loading…</span></div>
+                    <div class="stat-tile"><div class="shimmer" style="height:36px;margin-bottom:6px"></div><span>Loading…</span></div>
+                    <div class="stat-tile"><div class="shimmer" style="height:36px;margin-bottom:6px"></div><span>Loading…</span></div>
+                    <div class="stat-tile"><div class="shimmer" style="height:36px;margin-bottom:6px"></div><span>Loading…</span></div>
+                </div>
+            </div>
         </div>
 
-        <form id="avatarForm" style="display: block; width: 80%; margin: auto; text-align: center; background: rgba(255, 255, 255, 0.02); border-radius: 12px; padding: 18px;" action="/upload-avatar" method="POST" enctype="multipart/form-data">
-          <label for="avatarUpload" style="margin: 40px 0px 0px 0px; font-size:22px; letter-spacing:0.2px;">Change Profile Picture:</label>
-          <input type="file" id="avatarUpload" style="display: block; padding: 30px; text-align: center; margin: auto;" name="avatar" accept="image/*">
-          <button type="submit" class="btn btn-primary">Upload</button>
-        </form>
-
-        <div class="actions">
-          <a id="editBtn" class="btn btn-ghost" href="#" role="button">Edit profile</a>
-          <button id="logoutBtn" class="btn btn-primary">Sign out</button>
+        <!-- ── SUBJECTS ── -->
+        <div class="p-card">
+            <div class="p-card-head">
+                <div class="p-card-title"><span class="p-card-bar"></span>Your Subjects</div>
+                <a class="btn btn-outline" href="{{ url_for('tasks') }}" style="font-size:12px;padding:6px 14px">Manage →</a>
+            </div>
+            <div class="p-card-body">
+                <div class="subject-tags" id="subjectTagsRow">
+                    <span class="shimmer" style="width:120px;height:30px;border-radius:20px"></span>
+                    <span class="shimmer" style="width:100px;height:30px;border-radius:20px"></span>
+                    <span class="shimmer" style="width:140px;height:30px;border-radius:20px"></span>
+                </div>
+            </div>
         </div>
-      </section>
-    </main>
 
-    <script>
-      // load demo data (fallback)
-      const mock = JSON.parse(localStorage.getItem('gamify_user') || '{}');
+        <!-- ── EDIT PROFILE ── -->
+        <div class="p-card">
+            <div class="p-card-head">
+                <div class="p-card-title"><span class="p-card-bar"></span>Edit Profile</div>
+            </div>
+            <div class="p-card-body">
+                <form id="profileForm" onsubmit="saveProfile(event)">
+                    <div class="form-grid">
+                        <div class="form-row">
+                            <label class="form-label" for="usernameInput">Display Name</label>
+                            <input class="form-input" id="usernameInput" name="username"
+                                   type="text" value="{{ user.userName }}" maxlength="60" required>
+                        </div>
+                        <div class="form-row">
+                            <label class="form-label" for="emailInput">Email Address</label>
+                            <input class="form-input" id="emailInput" name="email"
+                                   type="email" value="{{ user.userEmail }}" maxlength="120" required>
+                        </div>
+                        <div class="form-row full">
+                            <label class="form-label" for="bioInput">Bio</label>
+                            <textarea class="form-textarea" id="bioInput" name="bio"
+                                      maxlength="500" placeholder="Write a short bio about yourself…">{{ user.userBio or '' }}</textarea>
+                            <span style="font-size:11.5px;color:#bbb;align-self:flex-end" id="bioCounter">{{ (user.userBio or '')|length }}/500</span>
+                        </div>
+                    </div>
+                    <div class="form-actions" style="margin-top:18px">
+                        <button type="submit" class="btn btn-primary" id="saveProfileBtn">Save Changes</button>
+                        <button type="button" class="btn btn-outline" onclick="resetProfileForm()">Reset</button>
+                    </div>
+                </form>
+            </div>
+        </div>
 
-      const bioEditor = document.getElementById('bioEditor');
-      const bioStatus = document.getElementById('bioStatus');
+        <!-- ── CHANGE PASSWORD ── -->
+        <div class="p-card">
+            <div class="p-card-head">
+                <div class="p-card-title"><span class="p-card-bar"></span>Change Password</div>
+            </div>
+            <div class="p-card-body">
+                <form id="passwordForm" onsubmit="changePassword(event)">
+                    <div class="form-grid">
+                        <div class="form-row">
+                            <label class="form-label" for="currentPw">Current Password</label>
+                            <input class="form-input" id="currentPw" type="password" placeholder="••••••••" required>
+                        </div>
+                        <div class="form-row">
+                            <label class="form-label" for="newPw">New Password</label>
+                            <input class="form-input" id="newPw" type="password" placeholder="••••••••" minlength="8" required>
+                        </div>
+                        <div class="form-row">
+                            <label class="form-label" for="confirmPw">Confirm New Password</label>
+                            <input class="form-input" id="confirmPw" type="password" placeholder="••••••••" minlength="8" required>
+                        </div>
+                    </div>
+                    <div class="form-actions" style="margin-top:18px">
+                        <button type="submit" class="btn btn-primary">Update Password</button>
+                    </div>
+                </form>
+            </div>
+        </div>
 
-      // try to fetch bio from service worker cache (/user/bio). fallback to localStorage/mock.
-      async function loadBio() {
-        try {
-          const res = await fetch('/user/bio', { cache: 'no-store' });
-          if (res && res.ok) {
-            const json = await res.json();
-            bioEditor.value = json.bio || (mock.bio || '');
+        <!-- ── DANGER ZONE ── -->
+        <div class="p-card">
+            <div class="p-card-head">
+                <div class="p-card-title" style="color:#dc2626"><span class="p-card-bar" style="background:#dc2626"></span>Danger Zone</div>
+            </div>
+            <div class="p-card-body">
+                <div class="danger-zone">
+                    <h3>Delete Account</h3>
+                    <p>Permanently remove your Dusty account and all associated data including tasks, sessions, flashcards and progress history. This action cannot be reversed.</p>
+                    <button class="btn btn-danger" onclick="openDeleteModal()">🗑 Delete My Account</button>
+                </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+    // Preferences modal functions
+    function openPrefsModal() {
+        loadPrefsSubjectsForProfile();
+        document.getElementById('prefsModal').classList.remove('hidden');
+    }
+    function closePrefsModal() { document.getElementById('prefsModal').classList.add('hidden'); }
+
+    /* ── CACHED VALUES ── */
+    const profileDataEl = document.getElementById('profileUserData');
+    const PROFILE_USER = JSON.parse(profileDataEl?.textContent || '{}');
+    const ORIG = {
+        username: PROFILE_USER.username || '',
+        email: PROFILE_USER.email || '',
+        bio: PROFILE_USER.bio || '',
+    };
+
+    /* ── TOAST ── */
+    function toast(msg, type = 'info') {
+        const el = document.getElementById('toast');
+        el.textContent = msg;
+        el.className = `status-toast show ${type}`;
+        clearTimeout(el._t);
+        el._t = setTimeout(() => { el.className = 'status-toast'; }, 4000);
+    }
+
+    /* ── AVATAR MODAL ── */
+    function openAvatarModal()  { document.getElementById('avatarModal').classList.remove('hidden'); }
+    function closeAvatarModal() { document.getElementById('avatarModal').classList.add('hidden'); }
+
+    function previewAvatar(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = ev => {
+            document.getElementById('avatarPreview').src = ev.target.result;
+            document.getElementById('avatarPreviewWrap').style.display = '';
+            document.getElementById('avatarUploadBtn').disabled = false;
+        };
+        reader.readAsDataURL(file);
+    }
+
+    /* Avatar form submits normally (multipart POST to /upload-avatar) — no JS needed */
+
+    /* ── DELETE MODAL ── */
+    function openDeleteModal()  { document.getElementById('deleteModal').classList.remove('hidden'); }
+    function closeDeleteModal() {
+        document.getElementById('deleteModal').classList.add('hidden');
+        document.getElementById('deleteConfirmInput').value = '';
+    }
+
+    async function confirmDelete() {
+        const val = document.getElementById('deleteConfirmInput').value.trim();
+        if (val !== 'DELETE') {
+            toast('Type DELETE exactly to confirm.', 'error');
             return;
-          }
-        } catch (err) {
-          // ignored: fallback below
         }
-        bioEditor.value = mock.bio || '';
-      }
-
-      // save bio: update localStorage and POST to /save-bio (service worker will intercept and cache)
-      async function saveBio() {
-        const bio = bioEditor.value || '';
-        bioStatus.textContent = 'Saving...';
-        // update local preview/storage immediately
-        const user = Object.assign({}, mock, { bio });
-        localStorage.setItem('gamify_user', JSON.stringify(user));
-        // send to sw / server
         try {
-          const res = await fetch('/save-bio', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ bio })
-          });
-          if (res && res.ok) {
-            bioStatus.textContent = 'Saved';
-            setTimeout(()=> bioStatus.textContent = '', 2000);
-            return;
-          }
+            const res  = await fetch('/delete-account', { method: 'POST' });
+            const data = await res.json();
+            if (res.ok) {
+                toast('Account deleted. Goodbye!', 'success');
+                setTimeout(() => { window.location.href = '/login'; }, 1500);
+            } else {
+                toast(data.error || 'Could not delete account.', 'error');
+            }
+        } catch { toast('Network error.', 'error'); }
+    }
+
+    /* ── SAVE PROFILE (name + email via /update-profile, bio via /save-bio) ── */
+    async function saveProfile(e) {
+        e.preventDefault();
+        const btn  = document.getElementById('saveProfileBtn');
+        const name = document.getElementById('usernameInput').value.trim();
+        const email = document.getElementById('emailInput').value.trim();
+        const bio   = document.getElementById('bioInput').value;
+
+        if (!name || !email) { toast('Name and email are required.', 'error'); return; }
+
+        btn.disabled = true; btn.textContent = 'Saving…';
+
+        try {
+            /* Save bio */
+            const bioRes = await fetch('/save-bio', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ bio }),
+            });
+            if (!bioRes.ok) throw new Error('Could not save bio');
+
+            /* Save name + email via form POST (keeps session updated) */
+            const fd = new FormData();
+            fd.append('username', name);
+            fd.append('email', email);
+            const profRes = await fetch('/update-profile', { method: 'POST', body: fd });
+            /* /update-profile redirects back to /profile on success */
+            if (profRes.redirected || profRes.ok) {
+                toast('Profile updated!', 'success');
+                document.getElementById('displayName').textContent  = name;
+                document.getElementById('displayEmail').textContent = email;
+                /* Update initial if no avatar */
+                const init = document.getElementById('avatarInitial');
+                if (init) init.textContent = name[0].toUpperCase();
+            } else {
+                throw new Error('Could not update profile');
+            }
         } catch (err) {
-          // network or no SW
+            toast(err.message, 'error');
+        } finally {
+            btn.disabled = false; btn.textContent = 'Save Changes';
         }
-        bioStatus.textContent = 'Saved locally';
-        setTimeout(()=> bioStatus.textContent = '', 2000);
-      }
+    }
 
-      document.getElementById('saveBio').addEventListener('click', (e) => {
+    function resetProfileForm() {
+        document.getElementById('usernameInput').value = ORIG.username;
+        document.getElementById('emailInput').value    = ORIG.email;
+        document.getElementById('bioInput').value      = ORIG.bio;
+        updateBioCounter();
+        toast('Form reset.', 'info');
+    }
+
+    /* ── CHANGE PASSWORD ── */
+    async function changePassword(e) {
         e.preventDefault();
-        saveBio();
-      });
+        const cur  = document.getElementById('currentPw').value;
+        const nw   = document.getElementById('newPw').value;
+        const conf = document.getElementById('confirmPw').value;
 
-      document.getElementById('resetBio').addEventListener('click', (e) => {
+        if (nw !== conf) { toast('New passwords do not match.', 'error'); return; }
+        if (nw.length < 8) { toast('Password must be at least 8 characters.', 'error'); return; }
+
+        try {
+            const res  = await fetch('/change-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ current_password: cur, new_password: nw }),
+            });
+            const data = await res.json();
+            if (res.ok) {
+                toast('Password updated!', 'success');
+                document.getElementById('passwordForm').reset();
+            } else {
+                toast(data.error || 'Could not update password.', 'error');
+            }
+        } catch { toast('Network error.', 'error'); }
+    }
+
+    /* ── BIO COUNTER ── */
+    function updateBioCounter() {
+        const bio = document.getElementById('bioInput');
+        document.getElementById('bioCounter').textContent = bio.value.length + '/500';
+    }
+    document.getElementById('bioInput').addEventListener('input', updateBioCounter);
+
+    /* ── LOAD STATS + SUBJECTS ── */
+    async function loadProfileData() {
+        try {
+            const [progRes, subjRes] = await Promise.all([
+                fetch('/api/progress'),
+                fetch('/api/subjects'),
+            ]);
+            const prog = progRes.ok ? await progRes.json() : {};
+            const subj = subjRes.ok ? await subjRes.json() : {};
+
+            /* Stats */
+            const tasks     = prog.tasks    || {};
+            const sessions  = prog.sessions || {};
+            const stats     = tasks.stats   || [];
+            const total     = stats.reduce((a,b) => a + Number(b.count||0), 0);
+            const completed = stats.find(s => s.status === 'completed')?.count || 0;
+            const hrs       = ((sessions.total_time_spent_seconds||0)/3600).toFixed(1);
+            const sessCount = sessions.total_sessions || 0;
+
+            document.getElementById('statsRow').innerHTML = `
+                <div class="stat-tile"><strong>${total}</strong><span>Total Tasks</span></div>
+                <div class="stat-tile"><strong>${completed}</strong><span>Completed</span></div>
+                <div class="stat-tile"><strong>${hrs}h</strong><span>Study Time</span></div>
+                <div class="stat-tile"><strong>${sessCount}</strong><span>Sessions</span></div>
+            `;
+
+            /* Badge counts */
+            const subjects = subj.subjects || [];
+            document.getElementById('subjectCountBadge').textContent = subjects.length + ' Subject' + (subjects.length !== 1 ? 's' : '');
+            document.getElementById('taskCountBadge').textContent    = total + ' Task' + (total !== 1 ? 's' : '');
+
+            /* Subject tags */
+            const COLOURS = {
+                orange:'#f5761c', blue:'#2563eb', green:'#15803d',
+                red:'#dc2626', purple:'#7c3aed', yellow:'#d97706', amber:'#d97706',
+                brown:'#92400e', teal:'#0891b2', pink:'#be185d',
+            };
+            const tagsHtml = subjects.map(s =>
+                `<span class="subject-tag" style="background:${COLOURS[s.colourScheme]||'#f5761c'}">${escH(s.subjectName)}</span>`
+            ).join('');
+            document.getElementById('subjectTagsRow').innerHTML = tagsHtml || '<span style="color:#bbb;font-size:13px">No subjects found.</span>';
+
+        } catch (err) {
+            console.error('[Profile] Load failed:', err);
+            document.getElementById('statsRow').innerHTML = `
+                <div class="stat-tile"><strong>0</strong><span>Total Tasks</span></div>
+                <div class="stat-tile"><strong>0</strong><span>Completed</span></div>
+                <div class="stat-tile"><strong>0.0h</strong><span>Study Time</span></div>
+                <div class="stat-tile"><strong>0</strong><span>Sessions</span></div>
+            `;
+            document.getElementById('subjectCountBadge').textContent = '0 Subjects';
+            document.getElementById('taskCountBadge').textContent = '0 Tasks';
+            document.getElementById('subjectTagsRow').innerHTML = '<span style="color:#bbb;font-size:13px">Subjects could not be loaded.</span>';
+        }
+    }
+
+    function escH(v) {
+        return String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+
+    loadProfileData();
+
+    const SUBJECT_COLOUR_OPTIONS = [
+        { key: 'orange', label: 'Orange' },
+        { key: 'blue', label: 'Blue' },
+        { key: 'green', label: 'Green' },
+        { key: 'red', label: 'Red' },
+        { key: 'purple', label: 'Purple' },
+        { key: 'amber', label: 'Amber' },
+        { key: 'brown', label: 'Brown' },
+        { key: 'teal', label: 'Teal' },
+        { key: 'pink', label: 'Pink' }
+    ];
+
+    // Preferences modal: load subjects and pre-fill
+    async function loadPrefsSubjectsForProfile() {
+        try {
+            const res = await fetch('/api/subjects');
+            const data = await res.json();
+            const wrap = document.getElementById('prefsSubjectsProfile');
+            wrap.innerHTML = '';
+            let settings = PROFILE_USER.userSettings || {};
+            if (typeof settings === 'string') {
+                try { settings = JSON.parse(settings || '{}') || {}; } catch { settings = {}; }
+            }
+            const selectedIds = new Set();
+            const selectedColours = {};
+            const hasSavedSubjects = Array.isArray(settings.subjects);
+            if (hasSavedSubjects) {
+                settings.subjects.forEach(item => {
+                    if (typeof item === 'number') {
+                        selectedIds.add(item);
+                    } else if (item && typeof item === 'object') {
+                        selectedIds.add(item.subjectID);
+                        selectedColours[item.subjectID] = item.colourScheme;
+                    }
+                });
+            }
+
+            (data.subjects || []).forEach(s => {
+                const id = s.subjectID;
+                const name = s.subjectName;
+                const checked = !hasSavedSubjects ? true : selectedIds.has(id);
+                const colour = selectedColours[id] || s.colourScheme || 'orange';
+                const row = document.createElement('div');
+                row.className = 'prefs-row';
+                row.innerHTML = `
+                    <label class="prefs-row-label">
+                        <input type="checkbox" name="subjectActive" value="${id}" ${checked ? 'checked' : ''}>
+                        <span>${escH(name)}</span>
+                    </label>
+                    <select name="colour-${id}" class="prefs-colour-select">
+                        ${SUBJECT_COLOUR_OPTIONS.map(opt =>
+                            `<option value="${opt.key}" ${opt.key === colour ? 'selected' : ''}>${opt.label}</option>`
+                        ).join('')}
+                    </select>
+                `;
+                wrap.appendChild(row);
+            });
+            // pre-select theme
+            const theme = settings.theme || 'light';
+            const radio = document.querySelectorAll('#prefsFormProfile input[name="theme"]');
+            radio.forEach(r => { if (r.value === theme) r.checked = true; });
+        } catch (e) { console.error('Could not load prefs subjects', e); }
+    }
+
+    document.getElementById('prefsFormProfile')?.addEventListener('submit', async function (e) {
         e.preventDefault();
-        bioEditor.value = mock.bio || '';
-        bioStatus.textContent = 'Reset';
-        setTimeout(()=> bioStatus.textContent = '', 1400);
-      });
-
-      document.getElementById('logoutBtn').addEventListener('click', () => {
-        localStorage.removeItem('gamify_user');
-        location.href = "{{ url_for('login') }}";
-      });
-
-      document.getElementById('editBtn').addEventListener('click', (e) => { e.preventDefault(); alert('Open edit profile UI (implement).'); });
-      document.getElementById('menuBtn').addEventListener('click', () => alert('Open navigation / account menu (implement).'));
-      document.getElementById('deleteAcct').addEventListener('click', () => {
-        if (!confirm('Delete account? This is a demo action.')) return;
-        alert('Call server API to delete account (implement).');
-      });
-
-      // initial load
-      loadBio();
-
-      // ensure SW ready (it will handle /save-bio and /user/bio)
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(()=>{});
-      }
-    </script>
-  </body>
+        const form = e.target;
+        const theme = form.querySelector('input[name="theme"]:checked')?.value || 'light';
+        const subjects = Array.from(form.querySelectorAll('input[name="subjectActive"]:checked')).map(input => ({
+            subjectID: Number(input.value),
+            colourScheme: form.querySelector(`select[name="colour-${input.value}"]`)?.value || 'orange'
+        }));
+        try {
+            const res = await fetch('/api/user/preferences', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ theme, subjects })
+            });
+            const data = await res.json().catch(() => ({}));
+            if (res.ok && data.success) {
+                toast('Preferences saved.', 'success');
+                PROFILE_USER.userSettings = { theme };
+                closePrefsModal();
+                if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
+                else document.documentElement.removeAttribute('data-theme');
+                loadProfileData();
+            } else {
+                toast(data.error || 'Could not save preferences', 'error');
+            }
+        } catch (err) { toast('Network error while saving preferences', 'error'); }
+    });
+</script>
+</body>
 </html>

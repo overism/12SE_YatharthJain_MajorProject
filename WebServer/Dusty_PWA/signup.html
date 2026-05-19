@@ -3,10 +3,163 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Sign Up - Gamify</title>
+    <title>Sign Up - Dusty</title>
     <link rel="icon" href="{{ url_for('static', filename='images/mainicon.png') }}">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+    <style>
+        /* ── PREFERENCES MODAL (post-signup) ── */
+        .prefs-overlay {
+            position: fixed; inset: 0; z-index: 9999;
+            background: rgba(10, 5, 0, 0.82);
+            backdrop-filter: blur(14px);
+            display: flex; align-items: center; justify-content: center;
+            padding: 20px;
+            animation: fadeOv .25s ease-out;
+        }
+        .prefs-overlay.hidden { display: none; }
+        @keyframes fadeOv { from{opacity:0} to{opacity:1} }
+
+        .prefs-box {
+            background: linear-gradient(160deg, #1c1208 0%, #140d05 100%);
+            border: 1px solid rgba(245,118,28,.2);
+            border-radius: 22px;
+            padding: 36px 32px;
+            width: 100%; max-width: 580px;
+            max-height: 92vh;
+            overflow-y: auto;
+            box-shadow: 0 40px 80px rgba(0,0,0,.7), 0 0 0 1px rgba(245,118,28,.08);
+            animation: slideUp .3s cubic-bezier(.22,.68,0,1.2);
+            scrollbar-width: thin;
+            scrollbar-color: rgba(245,118,28,.35) transparent;
+        }
+        .prefs-box::-webkit-scrollbar { width: 5px; }
+        .prefs-box::-webkit-scrollbar-thumb { background: rgba(245,118,28,.35); border-radius: 10px; }
+        @keyframes slideUp { from{opacity:0;transform:translateY(24px)} to{opacity:1;transform:translateY(0)} }
+
+        .prefs-logo { text-align: center; margin-bottom: 20px; }
+        .prefs-logo img { height: 52px; }
+
+        .prefs-heading {
+            font-size: 24px; font-weight: 800;
+            font-family: 'Cooper BT', Georgia, serif;
+            background: linear-gradient(90deg,#f5761c,#ee4319);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+            margin: 0 0 4px; text-align: center;
+        }
+        .prefs-sub { font-size: 13.5px; color: rgba(255,255,255,.42); text-align: center; margin: 0 0 28px; }
+
+        .prefs-section-label {
+            font-size: 11px; font-weight: 700; text-transform: uppercase;
+            letter-spacing: .9px; color: rgba(255,255,255,.35);
+            margin: 0 0 12px;
+        }
+
+        .subject-preset-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 9px;
+            margin-bottom: 28px;
+        }
+
+        .subject-preset-btn {
+            position: relative;
+            padding: 13px 14px;
+            border-radius: 13px;
+            border: 1.5px solid rgba(255,255,255,.1);
+            background: rgba(255,255,255,.04);
+            color: rgba(255,255,255,.7);
+            font-family: inherit; font-size: 13.5px; font-weight: 600;
+            cursor: pointer; text-align: left;
+            transition: all .18s ease;
+            display: flex; align-items: center; gap: 10px;
+        }
+        .subject-preset-btn:hover {
+            border-color: rgba(245,118,28,.4);
+            background: rgba(245,118,28,.08);
+            color: #fff;
+        }
+        .subject-preset-btn.selected {
+            border-color: var(--subj-col, #f5761c);
+            background: rgba(var(--subj-col-rgb, 245,118,28), .15);
+            color: #fff;
+        }
+        .subject-preset-btn .subj-check {
+            width: 20px; height: 20px; border-radius: 50%;
+            border: 2px solid currentColor;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 11px; flex-shrink: 0;
+            transition: background .15s;
+        }
+        .subject-preset-btn.selected .subj-check {
+            background: var(--subj-col, #f5761c);
+            border-color: var(--subj-col, #f5761c);
+            color: #fff;
+        }
+        .subject-preset-btn .subj-colour-dot {
+            width: 10px; height: 10px; border-radius: 50%;
+            background: var(--subj-col, #f5761c);
+            flex-shrink: 0; margin-left: auto;
+        }
+
+        .colour-assignments { display: flex; flex-direction: column; gap: 10px; margin-bottom: 28px; }
+
+        .colour-row {
+            display: flex; align-items: center; gap: 12px;
+            padding: 11px 14px; border-radius: 12px;
+            background: rgba(255,255,255,.04);
+            border: 1px solid rgba(255,255,255,.08);
+        }
+        .colour-row-name { flex: 1; font-size: 13.5px; font-weight: 600; color: #fff; }
+
+        .colour-swatches { display: flex; gap: 7px; flex-wrap: wrap; }
+        .colour-swatch {
+            width: 24px; height: 24px; border-radius: 50%;
+            border: 2px solid transparent; cursor: pointer;
+            transition: transform .15s, border-color .15s;
+        }
+        .colour-swatch:hover { transform: scale(1.15); }
+        .colour-swatch.active { border-color: #fff; transform: scale(1.18); box-shadow: 0 0 0 2px rgba(255,255,255,.25); }
+
+        .prefs-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px; }
+
+        .btn-prefs-skip {
+            padding: 11px 22px; border-radius: 12px;
+            background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12);
+            color: rgba(255,255,255,.65); font-family: inherit; font-size: 14px; font-weight: 600;
+            cursor: pointer; transition: all .2s;
+        }
+        .btn-prefs-skip:hover { background: rgba(255,255,255,.1); color: #fff; }
+
+        .btn-prefs-save {
+            padding: 11px 28px; border-radius: 12px;
+            background: linear-gradient(135deg,#f5761c,#ee4319);
+            border: none; color: #fff;
+            font-family: inherit; font-size: 14px; font-weight: 700;
+            cursor: pointer; transition: all .2s;
+            box-shadow: 0 4px 16px rgba(245,89,28,.4);
+        }
+        .btn-prefs-save:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(245,89,28,.55); }
+        .btn-prefs-save:disabled { opacity: .55; cursor: not-allowed; transform: none; }
+
+        .prefs-note {
+            font-size: 12px; color: rgba(255,255,255,.3);
+            text-align: center; margin-top: 16px; line-height: 1.5;
+        }
+
+        .prefs-steps {
+            display: flex; gap: 8px; justify-content: center; margin-bottom: 24px;
+        }
+        .prefs-step {
+            width: 28px; height: 4px; border-radius: 4px;
+            background: rgba(255,255,255,.12); transition: background .3s;
+        }
+        .prefs-step.active { background: #f5761c; }
+        .prefs-step.done   { background: rgba(245,118,28,.45); }
+
+        .prefs-step-panel { display: none; }
+        .prefs-step-panel.visible { display: block; }
+    </style>
   </head>
   <script>
     if ('serviceWorker' in navigator) {
@@ -16,6 +169,7 @@
     }
   </script>
   <body>
+    <script defer src="{{ url_for('static', filename='js/subject-colours.js') }}"></script>
     <!-- floating logo (same behaviour as login) -->
     <div class="auth-logo" aria-hidden="true">
       <img id="logo" src="{{ url_for('static', filename='images/transp512.png') }}" alt="Logo" />
@@ -56,45 +210,43 @@
       </form>
     </main>
 
-    <script>
-      // show logo
-      const wrap = document.querySelector('.logo-wrap');
-      requestAnimationFrame(()=> setTimeout(()=> wrap.classList.add('visible'), 180) );
+    <!-- Preferences Modal (post-signup) -->
+    <div class="prefs-overlay hidden" id="prefsModal" role="dialog" aria-modal="true" aria-labelledby="prefsHeading">
+        <div class="prefs-box">
 
-      // same parallax behavior as login
-      (function(){
-        const logo = document.getElementById('logo');
-        if (!logo) return;
-        const maxPixels = 5;
-        let raf = null;
-        function onMove(clientX, clientY){
-          const cx = window.innerWidth / 2;
-          const cy = window.innerHeight / 2;
-          const nx = (clientX - cx) / cx;
-          const ny = (clientY - cy) / cy;
-          const tx = nx * maxPixels;
-          const ty = ny * maxPixels;
-          logo.style.transform = `translate3d(${tx}px, ${ty}px, 0)`;
-        }
-        function handlePointer(e){
-          const x = (e.touches && e.touches[0]) ? e.touches[0].clientX : e.clientX;
-          const y = (e.touches && e.touches[0]) ? e.touches[0].clientY : e.clientY;
-          if (raf) cancelAnimationFrame(raf);
-          raf = requestAnimationFrame(()=> onMove(x,y));
-        }
-        function reset(){ if (raf) cancelAnimationFrame(raf); logo.style.transform = 'translate3d(0,0,0)'; }
-        window.addEventListener('mousemove', handlePointer, {passive:true});
-        window.addEventListener('pointermove', handlePointer, {passive:true});
-        window.addEventListener('touchmove', handlePointer, {passive:true});
-        window.addEventListener('mouseleave', reset);
-        window.addEventListener('pointerleave', reset);
-        window.addEventListener('blur', reset);
-      })();
+            <div class="prefs-logo">
+                <img src="{{ url_for('static', filename='images/transp512.png') }}" alt="Dusty">
+            </div>
 
-      if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js').catch(()=>{});
-      }
-    </script>
+            <h2 class="prefs-heading" id="prefsHeading">Welcome to Dusty 🎓</h2>
+            <p class="prefs-sub">Let's personalise your experience. Choose your HSC subjects and colours.</p>
+
+            <div class="prefs-steps">
+                <div class="prefs-step active" id="step0"></div>
+                <div class="prefs-step" id="step1"></div>
+            </div>
+
+            <div class="prefs-step-panel visible" id="stepPanel0">
+                <p class="prefs-section-label">Your HSC Subjects</p>
+                <div class="subject-preset-grid" id="subjectPresetGrid"></div>
+                <div class="prefs-actions">
+                    <button class="btn-prefs-skip" type="button" onclick="skipPrefs()">Skip for now</button>
+                    <button class="btn-prefs-save" type="button" id="nextStepBtn" onclick="goToStep2()" disabled>Choose Colours →</button>
+                </div>
+            </div>
+
+            <div class="prefs-step-panel" id="stepPanel1">
+                <p class="prefs-section-label">Subject Colours</p>
+                <div class="colour-assignments" id="colourAssignments"></div>
+                <div class="prefs-actions">
+                    <button class="btn-prefs-skip" type="button" onclick="goToStep1()">← Back</button>
+                    <button class="btn-prefs-save" type="button" id="savePrefsBtn" onclick="savePreferences()" method="POST">Save &amp; Get Started 🚀</button>
+                </div>
+                <p class="prefs-note">You can change these anytime from your Profile settings.</p>
+            </div>
+
+        </div>
+    </div>
 
     <script src="{{ url_for('static', filename='js/dusty.js') }}"></script>
   </body>

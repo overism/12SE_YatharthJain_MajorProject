@@ -9,6 +9,8 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
     <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css' rel='stylesheet' />
+    <script defer src="{{ url_for('static', filename='js/subject-colours.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/dusty.js') }}"></script>
 </head>
 <body>
     <sidebar class="sidebar" role="banner">
@@ -181,11 +183,6 @@
                     info.el.style.transform = 'scale(1)';
                     info.el.style.zIndex = 'auto';
                 },
-                loading: function(isLoading) {
-                    if (isLoading) {
-                        calendarEl.innerHTML = '<div class="calendar-loading">Loading calendar...</div>';
-                    }
-                },
                 height: 'auto',
                 contentHeight: 600,
                 aspectRatio: 1.8
@@ -218,15 +215,20 @@
                 .then(response => response.json())
                 .then(events => {
                     const calendarEvents = events.map(event => ({
-                        id: event.eventID,
+                        id: event.id || event.eventID,
                         title: event.title,
-                        start: event.startTime,
-                        end: event.endTime,
+                        start: event.start || event.startTime,
+                        end: event.end || event.endTime,
+                        color: event.color || '#f5761c',
+                        backgroundColor: event.color || '#f5761c',
+                        borderColor: event.color || '#d63a16',
                         description: event.description || '',
                         source: event.source,
+                        googleEventID: event.googleEventID || null,
                         extendedProps: {
                             source: event.source,
-                            description: event.description || ''
+                            description: event.description || '',
+                            googleEventID: event.googleEventID || null
                         }
                     }));
 
@@ -391,37 +393,42 @@
                 });
         }
 
-        function updateEventFromDrag(event) {
-            const eventData = {
-                startTime: event.start.toISOString(),
-                endTime: event.end ? event.end.toISOString() : new Date(event.start.getTime() + 60 * 60 * 1000).toISOString()
-            };
+        async function updateEventFromDrag(event) {
+            try {
 
-            showStatus('Updating event...', 'info');
+                const endTime = event.end
+                    ? event.end.toISOString()
+                    : new Date(event.start.getTime() + 3600000).toISOString();
 
-            fetch(`/calendar/events/${event.id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(eventData)
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.error) {
-                    showStatus('Error updating event', 'error');
-                    calendar.refetchEvents(); // Revert changes
-                } else {
-                    showStatus('Event updated successfully', 'success');
-                    // Add a subtle animation effect
-                    setTimeout(() => {
-                        hideStatus();
-                    }, 2000);
+                const response = await fetch(`/calendar/events/${event.id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        title: event.title,
+                        startTime: event.start.toISOString(),
+                        endTime: endTime,
+                        allDay: event.allDay
+                    })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || 'Failed to update event');
                 }
-            })
-            .catch(error => {
-                console.error('Error updating event:', error);
-                showStatus('Error updating event', 'error');
-                calendar.refetchEvents(); // Revert changes
-            });
+
+                showStatus('✅ Event updated successfully', 'success');
+
+            } catch (error) {
+
+                console.error('Event update failed:', error);
+
+                showStatus('❌ Failed to update event', 'error');
+
+                calendar.refetchEvents();
+            }
         }
 
         function generateSchedule() {
@@ -460,9 +467,13 @@
                     } else {
                         const imported = data.imported || 0;
                         const skipped = data.skipped || 0;
+                        const updated = data.updated || 0;
+                        const deleted = data.deleted || 0;
                         let message = '✅ Google Calendar synced successfully! 🎉';
                         
-                        if (imported > 0) {
+                        if (imported || updated || deleted) {
+                            message += `\nGoogle changes: ${imported} imported, ${updated} updated, ${deleted} deleted`;
+                        } else if (imported > 0) {
                             message += `\n📅 Imported ${imported} events`;
                             if (skipped > 0) {
                                 message += `, skipped ${skipped} duplicates`;

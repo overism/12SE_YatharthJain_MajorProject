@@ -1,34 +1,191 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="utf-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Dashboard - Gamify</title>
-        <link rel="icon" href="{{ url_for('static', filename='images/mainicon.png') }}">
-        <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
-        <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
-    </head>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dashboard - Dusty</title>
+    <link rel="icon" href="{{ url_for('static', filename='images/mainicon.png') }}">
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/home.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+    <script defer src="{{ url_for('static', filename='js/subject-colours.js') }}"></script>
+    <script defer src="{{ url_for('static', filename='js/dusty.js') }}"></script>
+    <script>
+        // Early shim: expose globals so onclick attributes never fail
+        // Subject colours provided by subject-colours.js; other fallbacks here.
+        window.dashTimerToggle = window.dashTimerToggle || function(){
+            if (window.DustyStudyTimer) {
+                try {
+                    const s = DustyStudyTimer.getState();
+                    s.isRunning ? DustyStudyTimer.pauseTimer() : DustyStudyTimer.startTimer();
+                } catch (e) { /* swallow until real impl loads */ }
+            }
+        };
+        window.dashTimerReset = window.dashTimerReset || function(){ if (window.DustyStudyTimer) { try { DustyStudyTimer.resetTimer(true); } catch(e){} } };
+        window.toggleTask = window.toggleTask || function(btn){ const row = btn && btn.closest ? btn.closest('.task-row') : null; if (!row) return; row.classList.toggle('done'); btn.textContent = row.classList.contains('done') ? '✓' : ''; };
+        window.doSearch = window.doSearch || function(){ const q = (document.getElementById('dashSearch')?.value || '').trim(); if (q) window.location.href = '/resources?q=' + encodeURIComponent(q); };
+    </script>
+    <script defer src="{{ url_for('static', filename='js/home.js') }}"></script>
+</head>
+<body>
     <script>
         if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.register('/sw.js')
-            .then(() => console.log('SW registered'))
-            .catch(err => console.error('SW failed', err));
+            navigator.serviceWorker.register('/sw.js')
+                .then(() => console.log('SW registered'))
+                .catch(err => console.error('SW failed', err));
         }
     </script>
-    <body>
-        <sidebar class="sidebar" role="banner">
-            <a class="brand" href="{{ url_for('home') }}" aria-label="Gamify home">
-                <img src="{{ url_for('static', filename='images/transp512.png') }}" alt="Gamify logo">
-            </a>
-            <nav class="nav" role="navigation" aria-label="Auth pages">
-                <a class="btn btn-active" href="{{ url_for('home') }}">Dashboard</a>
-                <a class="btn btn-ghost" href="{{ url_for('calendar') }}">Smart Calendar</a>
-                <a class="btn btn-ghost" href="{{ url_for('tasks') }}">Tasks</a>
-                <a class="btn btn-ghost" href="{{ url_for('timer') }}">Study Timer</a>
-                <a class="btn btn-ghost" href="{{ url_for('chat') }}">AI Assistant</a>
-                <a class="btn btn-ghost" href="{{ url_for('flashcards') }}">Flashcards</a>
-                <a class="btn btn-ghost" href="{{ url_for('progress') }}">Progress</a>
-                <a class="btn btn-ghost" href="{{ url_for('resources') }}">Resources</a>
-            </nav>
-        </sidebar>
-        
+
+    <sidebar class="sidebar" role="banner">
+        <a class="brand" href="{{ url_for('home') }}" aria-label="Dusty home">
+            <img src="{{ url_for('static', filename='images/transp512.png') }}" alt="Dusty logo">
+        </a>
+        <nav class="nav" role="navigation" aria-label="Study pages">
+            <a class="btn btn-active" href="{{ url_for('home') }}">Dashboard</a>
+            <a class="btn btn-ghost"  href="{{ url_for('calendar') }}">Smart Calendar</a>
+            <a class="btn btn-ghost"  href="{{ url_for('tasks') }}">Tasks</a>
+            <a class="btn btn-ghost"  href="{{ url_for('timer') }}">Study Timer</a>
+            <a class="btn btn-ghost"  href="{{ url_for('chat') }}">AI Assistant</a>
+            <a class="btn btn-ghost"  href="{{ url_for('flashcards') }}">Flashcards</a>
+            <a class="btn btn-ghost"  href="{{ url_for('progress') }}">Progress</a>
+            <a class="btn btn-ghost"  href="{{ url_for('resources') }}">Resources</a>
+        </nav>
+    </sidebar>
+
+    <div class="dash-container">
+        <!-- HEADER -->
+            <header class="dash-header">
+                <div>
+                    <h1 class="dash-title">Dashboard</h1>
+                <p class="dash-sub" id="greetingSub">Welcome back!</p>
+            </div>
+            <div class="dash-header-right">
+                <a class="btn btn-ghost" href="{{ url_for('profile') }}">👤 Profile</a>
+                <a class="btn btn-secondary" href="{{ url_for('logout') }}">Log out</a>
+            </div>
+        </header>
+
+        <!-- TOP SEARCH BAR -->
+        <div class="dash-topbar">
+            <div class="dash-search">
+                <input id="dashSearch" type="search" placeholder="search bar" aria-label="Search">
+                <button onclick="doSearch()">Search</button>
+            </div>
+            <a class="dash-user-btn" href="{{ url_for('profile') }}" title="Profile">👤</a>
+        </div>
+
+        <div class="dash-inner">
+
+            <!-- ══ FIXED STATS STRIP (not draggable) ══ -->
+            <div class="stats-strip" id="statsStrip">
+                <div class="stat-card"><div class="stat-card-val shimmer" style="height:34px;width:60px;margin:0 auto 4px">&nbsp;</div><div class="stat-card-lbl">Tasks Completed</div></div>
+                <div class="stat-card"><div class="stat-card-val shimmer" style="height:34px;width:60px;margin:0 auto 4px">&nbsp;</div><div class="stat-card-lbl">Study Hours</div></div>
+                <div class="stat-card"><div class="stat-card-val shimmer" style="height:34px;width:60px;margin:0 auto 4px">&nbsp;</div><div class="stat-card-lbl">Current Streak</div></div>
+                <div class="stat-card"><div class="stat-card-val shimmer" style="height:34px;width:60px;margin:0 auto 4px">&nbsp;</div><div class="stat-card-lbl">Weekly Goal</div></div>
+            </div>
+
+            <!-- ══ DRAGGABLE WIDGETS ══ -->
+            <!-- Row 1: subjects full-width -->
+            <div class="sortable-grid-full" id="sortRow0">
+                <div class="widget" data-widget-id="subjects">
+                    <div class="widget-head">
+                        <div class="widget-title"><span class="widget-title-bar"></span>Your Subjects</div>
+                        <div style="display:flex;align-items:center;gap:10px">
+                            <a class="widget-link" href="{{ url_for('tasks') }}">View tasks →</a>
+                            <span class="drag-handle" title="Drag to reorder">⠿</span>
+                        </div>
+                    </div>
+                    <div class="widget-body">
+                        <div class="subjects-grid" id="subjectsGrid">
+                            <div class="shimmer" style="height:80px;border-radius:14px"></div>
+                            <div class="shimmer" style="height:80px;border-radius:14px"></div>
+                            <div class="shimmer" style="height:80px;border-radius:14px"></div>
+                            <div class="shimmer" style="height:80px;border-radius:14px"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Row 2: Tasks + Timer (2 col) -->
+            <div class="sortable-grid" id="sortRow1">
+
+                <div class="widget" data-widget-id="tasks">
+                    <div class="widget-head">
+                        <div class="widget-title"><span class="widget-title-bar"></span>Upcoming Tasks</div>
+                        <div style="display:flex;align-items:center;gap:10px">
+                            <a class="widget-link" href="{{ url_for('tasks') }}">View all →</a>
+                            <span class="drag-handle" title="Drag to reorder">⠿</span>
+                        </div>
+                    </div>
+                    <div class="widget-body">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+                            <span style="font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.6px">Task</span>
+                            <span style="font-size:11px;font-weight:700;color:#aaa;text-transform:uppercase;letter-spacing:.6px">Days Left</span>
+                        </div>
+                        <div class="tasks-list" id="tasksList">
+                            <div class="shimmer" style="height:40px;margin-bottom:6px;border-radius:11px"></div>
+                            <div class="shimmer" style="height:40px;margin-bottom:6px;border-radius:11px"></div>
+                            <div class="shimmer" style="height:40px;border-radius:11px"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="widget" data-widget-id="timer">
+                    <div class="widget-head">
+                        <div class="widget-title"><span class="widget-title-bar"></span>Focus Timer</div>
+                        <div style="display:flex;align-items:center;gap:10px">
+                            <a class="widget-link" href="{{ url_for('timer') }}">Full timer →</a>
+                            <span class="drag-handle" title="Drag to reorder">⠿</span>
+                        </div>
+                    </div>
+                    <div class="timer-widget-body">
+                        <div class="timer-ring" id="timerRing">
+                            <svg viewBox="0 0 130 130">
+                                <circle cx="65" cy="65" r="58"
+                                    stroke-dasharray="364.4"
+                                    stroke-dashoffset="364.4"
+                                    id="timerArc"></circle>
+                            </svg>
+                            <div class="timer-display" id="dashTimerDisplay">00:00</div>
+                        </div>
+                        <div class="timer-subject-pill" id="dashTimerSubject">No subject</div>
+                        <div class="timer-controls">
+                            <button class="timer-ctrl" onclick="dashTimerReset()" title="Reset">↺</button>
+                            <button class="timer-ctrl play" id="dashPlayBtn" onclick="dashTimerToggle()" title="Start/Pause">▶</button>
+                            <button class="timer-ctrl" onclick="goToTimer()" title="Open timer">⤢</button>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Row 3: Quick Actions full-width -->
+            <div class="sortable-grid-full" id="sortRow2">
+                <div class="widget" data-widget-id="quickactions">
+                    <div class="widget-head">
+                        <div class="widget-title"><span class="widget-title-bar"></span>Quick Actions</div>
+                        <span class="drag-handle" title="Drag to reorder">⠿</span>
+                    </div>
+                    <div class="widget-body">
+                        <div class="quick-grid">
+                            <a class="quick-btn" href="{{ url_for('chat') }}">
+                                <span class="quick-btn-icon">🤖</span>AI Study Helper
+                            </a>
+                            <a class="quick-btn" href="{{ url_for('resources') }}">
+                                <span class="quick-btn-icon">📤</span>Upload Notes
+                            </a>
+                            <a class="quick-btn" href="{{ url_for('chat') }}?mode=generate">
+                                <span class="quick-btn-icon">📝</span>Practice Exam
+                            </a>
+                            <a class="quick-btn" href="{{ url_for('timer') }}">
+                                <span class="quick-btn-icon">📅</span>Plan Study Session
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

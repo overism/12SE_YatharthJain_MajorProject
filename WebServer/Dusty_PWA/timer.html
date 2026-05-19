@@ -3,10 +3,15 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Dashboard - Gamify</title>
+        <title>Study Timer - Dusty</title>
         <link rel="icon" href="{{ url_for('static', filename='images/mainicon.png') }}">
         <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
         <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
+        <link rel="stylesheet" href="{{ url_for('static', filename='css/timer.css') }}">
+        <script defer src="{{ url_for('static', filename='js/subject-colours.js') }}"></script>
+        <script defer src="{{ url_for('static', filename='js/subject-colours.js') }}"></script>
+        <script defer src="{{ url_for('static', filename='js/dusty.js') }}"></script>
+        <script defer src="{{ url_for('static', filename='js/timer.js') }}"></script>
     </head>
     <script>
         if ('serviceWorker' in navigator) {
@@ -31,4 +36,182 @@
                 <a class="btn btn-ghost" href="{{ url_for('resources') }}">Resources</a>
             </nav>
         </sidebar>
-        
+
+        <!-- Timer Loading Screen -->
+        <div class="page-loading" id="timer-loading">
+            <div class="page-loading-content">
+                <div class="page-loading-icon">
+                    <img src="{{ url_for('static', filename='images/timer-icon.svg') }}" alt="Timer icon" onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iODAiIGhlaWdodD0iODAiIHZpZXdCb3g9IjAgMCA4MCA4MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiB4PSIxMCIgeT0iMTUiIHJ4PSI4IiBmaWxsPSIjZjFhNDVjIiBzdHJva2U9IiNmZmZmZmYiIHN0cm9rZS13aWR0aD0iMiIvPgo8cGF0aCBkPSJNMjAgMzBMMzAgMjBMMzAgMzBMMjAgMzBaTTUwIDMwTDYwIDIwTDYwIDMwTDUwIDMwWiIgc3Ryb2tlPSIjZmZmZmZmIiBzdHJva2Utd2lkdGg9IjIiIGZpbGw9Im5vbmUiLz4KPHJlY3QgeD0iMTUiIHk9IjM1IiB3aWR0aD0iNTAiIGhlaWdodD0iMyIgcng9IjEiIGZpbGw9IiNmZmZmZmYiLz4KPHJlY3QgeD0iMTUiIHk9IjQwIiB3aWR0aD0iMzAiIGhlaWdodD0iMyIgcng9IjEiIGZpbGw9IiNmZmZmZmYiLz4KPHJlY3QgeD0iMTUiIHk9IjQ1IiB3aWR0aD0iNDAiIGhlaWdodD0iMyIgcng9IjEiIGZpbGw9IiNmZmZmZmYiLz4KPC9zdmc+';">
+                </div>
+                <h2 class="page-loading-title">Loading Timer</h2>
+                <p class="page-loading-subtitle">Preparing your study session...</p>
+                <div class="page-loading-progress">
+                    <div class="page-loading-progress-bar"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content Container -->
+        <div class="timer-container">
+
+            <!-- Timer Screen -->
+            <div id="timerScreen" class="timer-screen active">
+                <div class="timer-header">
+                    <h1 class="timer-title">Study Timer</h1>
+                    <button class="btn btn-secondary" id="popoutBtn" type="button">Pop Out Timer</button>
+                </div>
+
+                <!-- Timer Display Section -->
+                <div class="timer-display-section">
+                    <div class="timer-preset-label" id="presetLabel">Custom Timer</div>
+                    <div class="timer-display" id="timerDisplay">01:00</div>
+                    <div class="timer-subject-line">
+                        <span class="timer-subject-label">Subject</span>
+                        <button class="btn btn-ghost timer-subject-btn" id="subjectBtn" type="button">Choose subject</button>
+                    </div>
+                    <div class="timer-stats">
+                        <div class="stat-item">
+                            <span class="stat-label">Duration</span>
+                            <span class="stat-value" id="durationValue">60 min</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Status</span>
+                            <span class="stat-value" id="statusValue">Ready</span>
+                        </div>
+                    </div>
+                    <div class="finish-session-row">
+                        <button class="btn btn-primary finish-session-btn" id="finishSessionBtn" type="button" disabled>Finish Session</button>
+                    </div>
+                </div>
+
+                <!-- Timer Controls -->
+                <div class="timer-controls">
+                    <button class="control-btn reset-btn" id="resetBtn" title="Reset timer">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                            <path d="M3 3v5h5"></path>
+                        </svg>
+                    </button>
+                    <button class="control-btn play-btn" id="playBtn" title="Start timer">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M8 5v14l11-7z"></path>
+                        </svg>
+                    </button>
+                    <button class="control-btn pause-btn hidden" id="pauseBtn" title="Pause timer">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"></path>
+                        </svg>
+                    </button>
+                </div>
+
+                <!-- Presets Section -->
+                <div class="presets-section">
+                    <div class="presets-header">
+                        <h2 class="presets-title">Timer Presets</h2>
+                        <button class="btn btn-secondary add-preset-btn" id="addPresetBtn" title="Create new preset">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                            New Preset
+                        </button>
+                    </div>
+                    <div id="presetsContainer" class="presets-container">
+                        <!-- Populated by JavaScript -->
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Create/Edit Preset Modal -->
+        <div id="presetModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="modalTitle">Create New Preset</h2>
+                    <button class="modal-close" id="closeModalBtn" title="Close">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="form-group">
+                        <label for="presetName">Preset Name</label>
+                        <input type="text" id="presetName" placeholder="e.g., Pomodoro, Deep Focus" maxlength="50">
+                    </div>
+                    <div class="form-group">
+                        <label for="presetDuration">Duration (minutes)</label>
+                        <input type="number" id="presetDuration" min="1" max="120" value="25" placeholder="25">
+                    </div>
+                    <div class="form-group">
+                        <label for="presetDescription">Description</label>
+                        <textarea id="presetDescription" placeholder="Optional description" maxlength="100"></textarea>
+                    </div>
+                    <div class="preset-quick-presets">
+                        <p class="quick-label">Quick Presets:</p>
+                        <button type="button" class="quick-preset-btn" data-minutes="5">5 min</button>
+                        <button type="button" class="quick-preset-btn" data-minutes="15">15 min</button>
+                        <button type="button" class="quick-preset-btn" data-minutes="25">25 min (Pomodoro)</button>
+                        <button type="button" class="quick-preset-btn" data-minutes="50">50 min</button>
+                        <button type="button" class="quick-preset-btn" data-minutes="90">90 min (Deep)</button>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" id="cancelPresetBtn">Cancel</button>
+                    <button class="btn btn-primary" id="savePresetBtn">Create Preset</button>
+                    <button class="btn btn-danger hidden" id="deletePresetBtn">Delete</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Subject Prompt Modal -->
+        <div id="subjectModal" class="modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Choose Subject</h2>
+                    <button class="modal-close" id="closeSubjectModalBtn" title="Close">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"></line>
+                            <line x1="6" y1="6" x2="18" y2="18"></line>
+                        </svg>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <p class="subject-modal-copy">Pick the subject for this study session.</p>
+                    <div id="subjectGrid" class="subject-grid subject-grid-modal"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notification Status -->
+        <div id="status" class="status"></div>
+
+        <!-- Session Complete Modal -->
+        <div id="sessionCompleteModal" class="modal">
+            <div class="modal-content session-complete">
+                <div class="modal-header">
+                    <h2>Session Complete! 🎉</h2>
+                </div>
+                <div class="modal-body session-body">
+                    <div class="session-stat">
+                        <span class="session-stat-label">Time Studied:</span>
+                        <span class="session-stat-value" id="sessionTimeValue">0:00</span>
+                    </div>
+                    <div class="session-stat">
+                        <span class="session-stat-label">Subject:</span>
+                        <span class="session-stat-value" id="sessionSubjectValue">-</span>
+                    </div>
+                    <div class="form-group">
+                        <label for="sessionNotes">Session Notes (Optional)</label>
+                        <textarea id="sessionNotes" placeholder="What did you study? How did it go?" maxlength="500"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary" id="skipSaveBtn">Skip</button>
+                    <button class="btn btn-primary" id="saveSessionBtn">Save Session</button>
+                </div>
+            </div>
+        </div>
+    </body>
+</html>
