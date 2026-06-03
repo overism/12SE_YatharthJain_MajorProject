@@ -13,6 +13,13 @@
     <script defer src="{{ url_for('static', filename='js/chat.js') }}"></script>
 </head>
 <body>
+<script id="chatUserData" type="application/json">
+{{ {
+    'username': user.userName if user else '',
+    'email': user.userEmail if user else '',
+    'pfp': user.userPfp if user and user.userPfp else ''
+} | tojson }}
+</script>
 
 <sidebar class="sidebar" role="banner">
     <a class="brand" href="{{ url_for('home') }}" aria-label="Dusty home">
@@ -37,7 +44,6 @@
     <header class="chat-header">
         <div class="chat-header-left">
             <h1 class="chat-title">AI Assistant</h1>
-            <p class="chat-subtitle">HSC tutoring, feedback, practice questions and quizzes — powered by your resources.</p>
         </div>
         <div class="chat-header-actions">
             <div class="kb-status" id="kbStatus">
@@ -124,7 +130,7 @@
 
             <div class="messages" id="messages">
                 <article class="message assistant">
-                    <div class="msg-av">D</div>
+                    <div class="msg-av"><img src="/static/images/icon-192.png" width="25" height="25" alt="Assistant"></div>
                     <div class="msg-bubble">
                         <strong>Ready when you are.</strong>
                         <p>Ask any HSC question, paste a response for band feedback, generate an exam question, or switch to Quiz mode.</p>
@@ -150,14 +156,6 @@
             </form>
 
         </section>
-
-        <!-- RIGHT: Sources -->
-        <aside class="sources-panel">
-            <h2 class="sources-heading">Sources</h2>
-            <div id="sourcesList" class="sources-list">
-                <p class="sources-empty">Retrieved citations appear here after each response.</p>
-            </div>
-        </aside>
 
     </div>
 </div>

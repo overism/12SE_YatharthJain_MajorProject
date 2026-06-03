@@ -206,7 +206,8 @@ html, body {
 
 .modal-box {
     background: #fff; border-radius: 18px;
-    padding: 30px; width: 90%; max-width: 440px;
+    padding: 30px; width: 90%; max-width: 720px;
+    max-height: 92vh; overflow-y: auto;
     box-shadow: 0 30px 60px rgba(0,0,0,.2);
     animation: slideM .25s ease-out;
 }
@@ -249,6 +250,12 @@ html, body {
     border: 1px solid rgba(34, 20, 11, 0.12);
     background: #fff;
     color: #22140b;
+}
+
+.profile-scheduler-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 12px;
 }
 
 .file-drop {

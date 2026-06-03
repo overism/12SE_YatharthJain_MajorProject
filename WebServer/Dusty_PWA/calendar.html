@@ -98,6 +98,257 @@
         </div>
     </div>
 
+    <!-- Generate Schedule Modal -->
+    <div id="generateScheduleModal" class="schedule-modal">
+        <div class="schedule-modal-content">
+            <button class="close-btn" onclick="closeGenerateScheduleModal()">&times;</button>
+            <h2 class="schedule-modal-title">Generate Study Schedule</h2>
+            <p class="schedule-modal-subtitle">Tell us what you need to study and we'll create an intelligent schedule tailored to your deadlines</p>
+
+            <!-- How it works - Quick explanation -->
+            <div class="schedule-how-it-works">
+                <div class="how-it-works-step">
+                    <span class="step-number">1</span>
+                    <span class="step-text">Tell us about your exams, assignments & goals</span>
+                </div>
+                <div class="how-it-works-step">
+                    <span class="step-number">2</span>
+                    <span class="step-text">We plan study sessions up to your deadlines</span>
+                </div>
+                <div class="how-it-works-step">
+                    <span class="step-number">3</span>
+                    <span class="step-text">Review and save to your calendar</span>
+                </div>
+            </div>
+
+            <form id="scheduleGenerationForm">
+                <!-- Freeform Input Section -->
+                <div class="form-section">
+                    <div class="form-section-header">
+                        <svg class="form-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+                        </svg>
+                        <span>What do you need to study?</span>
+                        <span class="section-badge">Most Important</span>
+                    </div>
+                    <div class="form-group">
+                        <textarea id="freeformInput" rows="5" placeholder="e.g., I have a chemistry exam next Thursday, maths assignment due Friday, need more physics revision before the test, soccer practice Tuesday 5pm"></textarea>
+                        <p class="form-hint">
+                            <strong>Tips:</strong> Mention exams ("maths exam next Thursday"), assignments ("essay due Friday"), or topics you need to review ("more chemistry practice").
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Structured Input Section -->
+                <div class="form-section collapsible">
+                    <div class="form-section-header">
+                        <svg class="form-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
+                            <rect x="9" y="3" width="6" height="4" rx="1"/>
+                            <line x1="9" y1="12" x2="15" y2="12"/>
+                            <line x1="9" y1="16" x2="13" y2="16"/>
+                        </svg>
+                        <span>Structured Details</span>
+                        <button class="collapse-toggle" type="button" onclick="toggleScheduleSection(this.closest('.form-section'))" aria-label="Toggle structured details">▼</button>
+                    </div>
+                    <div class="form-section-content">
+                        <!-- Exams/Tests -->
+                        <div class="input-group">
+                            <h4>Exams & Tests <span class="optional-mark">(optional)</span></h4>
+                            <p class="form-hint">If you add an exam, both subject and date are required.</p>
+                            <div id="examsContainer">
+                                <div class="schedule-item-row">
+                                    <input type="text" class="schedule-input-subject" placeholder="Subject * (e.g. Maths)" data-type="exam" aria-label="Exam subject required when adding an exam">
+                                    <input type="date" class="schedule-input-date" placeholder="Date *" aria-label="Exam date required when adding an exam">
+                                    <button type="button" class="btn-remove-item" onclick="removeScheduleRow(this)">&times;</button>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-primary" onclick="addScheduleRow('exams')">+ Add Exam</button>
+                        </div>
+
+                        <!-- Assignments -->
+                        <div class="input-group">
+                            <h4>Assignments <span class="optional-mark">(optional)</span></h4>
+                            <p class="form-hint">If you add an assignment, both title and due date are required.</p>
+                            <div id="assignmentsContainer">
+                                <div class="schedule-item-row">
+                                    <input type="text" class="schedule-input-subject" placeholder="Assignment title *" data-type="assignment" aria-label="Assignment title required when adding an assignment">
+                                    <input type="date" class="schedule-input-date" placeholder="Due date *" aria-label="Assignment due date required when adding an assignment">
+                                    <button type="button" class="btn-remove-item" onclick="removeScheduleRow(this)">&times;</button>
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-primary" onclick="addScheduleRow('assignments')">+ Add Assignment</button>
+                        </div>
+
+                        <!-- Priority Subjects -->
+                        <div class="input-group">
+                            <h4>Subjects Needing More Focus <span class="optional-mark">(optional)</span></h4>
+                            <div class="priority-subjects-grid">
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="priority_subject" value="maths"> Maths
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="priority_subject" value="english"> English
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="priority_subject" value="physics"> Physics
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="priority_subject" value="chemistry"> Chemistry
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="priority_subject" value="biology"> Biology
+                                </label>
+                                <label class="checkbox-label">
+                                    <input type="checkbox" name="priority_subject" value="economics"> Economics
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Preferences Section -->
+                <div class="form-section collapsible">
+                    <div class="form-section-header">
+                        <svg class="form-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+                        </svg>
+                        <span>Preferences</span>
+                        <button class="collapse-toggle" type="button" onclick="toggleScheduleSection(this.closest('.form-section'))" aria-label="Toggle preferences">▼</button>
+                    </div>
+                    <div class="form-section-content">
+                        <div class="preferences-grid">
+                            <div class="form-group">
+                                <label for="studyStart">Study Start Time <span class="required-mark">*</span></label>
+                                <select id="studyStart">
+                                    <option value="6">6:00 AM</option>
+                                    <option value="7">7:00 AM</option>
+                                    <option value="8" selected>8:00 AM</option>
+                                    <option value="9">9:00 AM</option>
+                                    <option value="10">10:00 AM</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="studyEnd">Study End Time <span class="required-mark">*</span></label>
+                                <select id="studyEnd">
+                                    <option value="20">8:00 PM</option>
+                                    <option value="21">9:00 PM</option>
+                                    <option value="22" selected>10:00 PM</option>
+                                    <option value="23">11:00 PM</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="sessionDuration">Session Duration <span class="required-mark">*</span></label>
+                                <select id="sessionDuration">
+                                    <option value="30">30 minutes</option>
+                                    <option value="45">45 minutes</option>
+                                    <option value="60" selected>1 hour</option>
+                                    <option value="90">1.5 hours</option>
+                                    <option value="120">2 hours</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="maxDaily">Max Daily Study <span class="required-mark">*</span></label>
+                                <select id="maxDaily">
+                                    <option value="2">2 hours</option>
+                                    <option value="3">3 hours</option>
+                                    <option value="4" selected>4 hours</option>
+                                    <option value="5">5 hours</option>
+                                    <option value="6">6 hours</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="checkbox-label">
+                                <input type="checkbox" id="includeBreaks" checked> Include breaks between sessions
+                            </label>
+                        </div>
+                        <div class="form-group">
+                            <label>Preferred Study Techniques <span class="optional-mark">(optional)</span></label>
+                            <div class="study-technique-grid">
+                                <label class="study-technique-card">
+                                    <input type="checkbox" name="study_technique" value="Spaced Repetition">
+                                    <span>
+                                        <strong>Spaced Repetition</strong>
+                                        <small>Review content over multiple sessions so it sticks long term.</small>
+                                    </span>
+                                </label>
+                                <label class="study-technique-card">
+                                    <input type="checkbox" name="study_technique" value="Active Recall">
+                                    <span>
+                                        <strong>Active Recall</strong>
+                                        <small>Test yourself without notes to strengthen memory and exam readiness.</small>
+                                    </span>
+                                </label>
+                                <label class="study-technique-card">
+                                    <input type="checkbox" name="study_technique" value="Blurting">
+                                    <span>
+                                        <strong>Blurting</strong>
+                                        <small>Write everything you remember, then compare it with your notes.</small>
+                                    </span>
+                                </label>
+                                <label class="study-technique-card">
+                                    <input type="checkbox" name="study_technique" value="Past Paper Practice">
+                                    <span>
+                                        <strong>Past Papers</strong>
+                                        <small>Practise timed HSC-style questions and review marking criteria.</small>
+                                    </span>
+                                </label>
+                                <label class="study-technique-card">
+                                    <input type="checkbox" name="study_technique" value="Error Analysis">
+                                    <span>
+                                        <strong>Error Analysis</strong>
+                                        <small>Target mistakes from quizzes, homework, and practice papers.</small>
+                                    </span>
+                                </label>
+                                <label class="study-technique-card">
+                                    <input type="checkbox" name="study_technique" value="Worked Examples">
+                                    <span>
+                                        <strong>Worked Examples</strong>
+                                        <small>Study model solutions before trying similar problems yourself.</small>
+                                    </span>
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Loading State -->
+                <div id="scheduleLoading" class="schedule-loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Generating your personalized schedule...</p>
+                    <p class="loading-subtext">We analyzing your deadlines and available time to create the optimal study plan.</p>
+                </div>
+
+                <!-- Preview Section -->
+                <div id="schedulePreview" class="schedule-preview" style="display: none;">
+                    <h3>Generated Schedule Preview</h3>
+                    <div id="schedulePreviewContent" class="schedule-preview-content"></div>
+                </div>
+
+                <div class="form-actions">
+                    <button type="button" class="btn btn-secondary" onclick="closeGenerateScheduleModal()">Cancel</button>
+                    <button type="button" class="btn btn-outline" id="previewScheduleBtn" onclick="previewSchedule()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                            <circle cx="12" cy="12" r="3"/>
+                        </svg>
+                        Preview
+                    </button>
+                    <button type="button" class="btn btn-primary" id="generateScheduleBtn" onclick="generateAndSaveSchedule()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16">
+                            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                            <polyline points="17 21 17 13 7 13 7 21"/>
+                            <polyline points="7 3 7 8 15 8"/>
+                        </svg>
+                        Save to Calendar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
     <script>
         if ('serviceWorker' in navigator) {
@@ -195,7 +446,7 @@
 
             // Event listeners
             document.getElementById('newEventBtn').addEventListener('click', () => openNewEventForm());
-            document.getElementById('generateBtn').addEventListener('click', generateSchedule);
+            document.getElementById('generateBtn').addEventListener('click', openGenerateScheduleModal);
             document.getElementById('syncBtn').addEventListener('click', syncGoogleCalendar);
             document.getElementById('connectGoogleBtn').addEventListener('click', connectGoogleCalendar);
         });
@@ -431,30 +682,372 @@
             }
         }
 
-        function generateSchedule() {
-            if (!confirm('🎯 Generate schedule from pending tasks?\n\nThis will create optimized events for your unscheduled tasks.')) {
+        function openScheduleGenerator() {
+            // Open the modal instead of directly generating
+            openGenerateScheduleModal();
+        }
+
+        // ====== NEW SMART SCHEDULE MODAL FUNCTIONS ======
+
+        let generatedSessions = [];
+        let previewGenerated = false;
+
+
+        function openGenerateScheduleModal() {
+            const modal = document.getElementById('generateScheduleModal');
+            modal.style.display = 'block';
+            document.body.style.overflow = 'hidden';
+
+            // Reset form
+            document.getElementById('freeformInput').value = '';
+            document.getElementById('schedulePreview').style.display = 'none';
+            generatedSessions = [];
+
+            // Reset structured inputs
+            resetStructuredInputs();
+        }
+
+        function closeGenerateScheduleModal() {
+            const modal = document.getElementById('generateScheduleModal');
+            modal.style.display = 'none';
+            document.body.style.overflow = 'auto';
+        }
+
+        function resetStructuredInputs() {
+            // Reset exams container
+            const examsContainer = document.getElementById('examsContainer');
+            examsContainer.innerHTML = `
+                <div class="schedule-item-row">
+                    <input type="text" class="schedule-input-subject" placeholder="Subject * (e.g. Maths)" data-type="exam" aria-label="Exam subject required when adding an exam">
+                    <input type="date" class="schedule-input-date" placeholder="Date *" aria-label="Exam date required when adding an exam">
+                    <button type="button" class="btn-remove-item" onclick="removeScheduleRow(this)">&times;</button>
+                </div>
+            `;
+
+            // Reset assignments container
+            const assignmentsContainer = document.getElementById('assignmentsContainer');
+            assignmentsContainer.innerHTML = `
+                <div class="schedule-item-row">
+                    <input type="text" class="schedule-input-subject" placeholder="Assignment title *" data-type="assignment" aria-label="Assignment title required when adding an assignment">
+                    <input type="date" class="schedule-input-date" placeholder="Due date *" aria-label="Assignment due date required when adding an assignment">
+                    <button type="button" class="btn-remove-item" onclick="removeScheduleRow(this)">&times;</button>
+                </div>
+            `;
+
+            // Reset checkboxes
+            document.querySelectorAll('input[name="priority_subject"]').forEach(cb => cb.checked = false);
+        }
+
+        function addScheduleRow(type) {
+            const container = document.getElementById(type + 'Container');
+            const placeholder = type === 'exams' ? 'Subject * (e.g. Maths)' : 'Assignment title *';
+            const datePlaceholder = type === 'exams' ? 'Date *' : 'Due date *';
+
+            const row = document.createElement('div');
+            row.className = 'schedule-item-row';
+            row.innerHTML = `
+                <input type="text" class="schedule-input-subject" placeholder="${placeholder}" data-type="${type.slice(0, -1)}">
+                <input type="date" class="schedule-input-date" placeholder="${datePlaceholder}">
+                <button type="button" class="btn-remove-item" onclick="removeScheduleRow(this)">&times;</button>
+            `;
+            container.appendChild(row);
+        }
+
+        function removeScheduleRow(button) {
+            const row = button.parentElement;
+            const container = row.parentElement;
+            if (container.children.length > 1) {
+                row.remove();
+            } else {
+                // Clear inputs instead of removing last row
+                row.querySelectorAll('input').forEach(input => input.value = '');
+            }
+        }
+
+        function toggleScheduleSection(element) {
+            element.classList.toggle('collapsed');
+        }
+
+        function previewSchedule() {
+            const formData = collectFormData();
+            if (formData.errors.length) {
+                showStatus(formData.errors[0], 'error');
                 return;
             }
 
-            showStatus('🤖 AI is generating your optimal schedule...', 'info');
+            // Show loading
+            document.getElementById('scheduleLoading').style.display = 'block';
+            document.getElementById('previewScheduleBtn').disabled = true;
 
-            fetch('/calendar/generate', { method: 'POST' })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.error) {
-                        showStatus('❌ ' + data.error, 'error');
-                    } else {
-                        const message = `✅ Schedule generated! ✨\nCreated ${data.created || 0} events, ${data.failed || 0} conflicts avoided.`;
-                        showStatus(message, 'success');
-                        calendar.refetchEvents();
-                        setTimeout(() => hideStatus(), 5000);
-                    }
-                })
-                .catch(error => {
-                    console.error('Error generating schedule:', error);
-                    showStatus('❌ Error generating schedule', 'error');
-                });
+            fetch('/api/schedule/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData)
+            })
+            .then(async response => {
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(data.message || data.error || 'Could not generate preview');
+                }
+                return data;
+            })
+            .then(data => {
+                document.getElementById('scheduleLoading').style.display = 'none';
+                document.getElementById('previewScheduleBtn').disabled = false;
+
+                if (data.status === 'error') {
+                    showStatus('❌ ' + data.message, 'error');
+                    return;
+                }
+
+                generatedSessions = data.sessions || [];
+                previewGenerated = true;
+                displaySchedulePreview(data);
+            })
+            .catch(error => {
+                document.getElementById('scheduleLoading').style.display = 'none';
+                document.getElementById('previewScheduleBtn').disabled = false;
+                console.error('Error generating preview:', error);
+                showStatus('❌ Error generating preview', 'error');
+            });
         }
+
+        function generateAndSaveSchedule() {
+            // If preview already generated sessions, save those directly
+            if (generatedSessions && generatedSessions.length > 0) {
+                saveGeneratedSchedule(generatedSessions);
+                return;
+            }
+
+            const formData = collectFormData();
+
+            if (formData.errors.length) {
+                showStatus(formData.errors[0], 'error');
+                return;
+            }
+
+            document.getElementById('scheduleLoading').style.display = 'block';
+            document.getElementById('generateScheduleBtn').disabled = true;
+
+            fetch('/api/schedule/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(formData)
+            })
+            .then(async response => {
+                const data = await response.json().catch(() => ({}));
+
+                if (!response.ok) {
+                    throw new Error(
+                        data.message ||
+                        data.error ||
+                        'Could not generate schedule'
+                    );
+                }
+
+                return data;
+            })
+            .then(data => {
+                document.getElementById('scheduleLoading').style.display = 'none';
+                document.getElementById('generateScheduleBtn').disabled = false;
+
+                if (data.status === 'error') {
+                    showStatus('❌ ' + data.message, 'error');
+                    return;
+                }
+
+                generatedSessions = data.sessions || [];
+                previewGenerated = false;
+                saveGeneratedSchedule(generatedSessions);
+            })
+            .catch(error => {
+                document.getElementById('scheduleLoading').style.display = 'none';
+                document.getElementById('generateScheduleBtn').disabled = false;
+
+                console.error('Error generating schedule:', error);
+
+                showStatus(
+                    'Error generating schedule: ' + error.message,
+                    'error'
+                );
+            });
+
+        }
+
+        function collectFormData() {
+            const freeformText = document.getElementById('freeformInput').value;
+
+            // Collect structured tasks
+            const tasks = [];
+            const errors = [];
+
+            // Exams - handle both select and text inputs
+            document.querySelectorAll('#examsContainer .schedule-item-row').forEach(row => {
+                const subjectInput = row.querySelector('.schedule-input-subject, .schedule-input-subject-select');
+                const subject = subjectInput ? subjectInput.value : '';
+                const date = row.querySelector('.schedule-input-date').value;
+                if ((subject && !date) || (!subject && date)) {
+                    errors.push('Exam rows need both a subject and a date.');
+                }
+                if (subject && date) {
+                    tasks.push({
+                        title: subject + ' Exam',
+                        type: 'exam',
+                        due_date: date,
+                        subject: subject.toLowerCase()
+                    });
+                }
+            });
+
+            // Assignments
+            document.querySelectorAll('#assignmentsContainer .schedule-item-row').forEach(row => {
+                const title = row.querySelector('.schedule-input-subject').value;
+                const date = row.querySelector('.schedule-input-date').value;
+                if ((title && !date) || (!title && date)) {
+                    errors.push('Assignment rows need both a title and a due date.');
+                }
+                if (title && date) {
+                    tasks.push({
+                        title: title,
+                        type: 'assignment',
+                        due_date: date,
+                        subject: 'general'
+                    });
+                }
+            });
+
+            // Priority subjects
+            const prioritySubjects = [];
+            document.querySelectorAll('input[name="priority_subject"]:checked').forEach(cb => {
+                prioritySubjects.push(cb.value);
+            });
+
+            const studyTechniques = [];
+            document.querySelectorAll('input[name="study_technique"]:checked').forEach(cb => {
+                studyTechniques.push(cb.value);
+            });
+
+            // Preferences
+            const options = {
+                session_duration: parseInt(document.getElementById('sessionDuration').value),
+                max_daily_hours: parseInt(document.getElementById('maxDaily').value),
+                include_breaks: document.getElementById('includeBreaks').checked,
+                break_duration: 10
+            };
+
+            return {
+                freeform_text: freeformText,
+                tasks: tasks,
+                errors: errors,
+                preferences: {
+                    priority_subjects: prioritySubjects,
+                    study_start: parseInt(document.getElementById('studyStart').value),
+                    study_end: parseInt(document.getElementById('studyEnd').value),
+                    max_daily_hours: parseInt(document.getElementById('maxDaily').value),
+                    session_duration: parseInt(document.getElementById('sessionDuration').value),
+                    study_techniques: studyTechniques
+                },
+                options: options
+            };
+        }
+
+        function displaySchedulePreview(data) {
+            const preview = document.getElementById('schedulePreview');
+            const content = document.getElementById('schedulePreviewContent');
+            const summary = data.summary;
+
+            let html = '';
+
+            // Summary
+            if (summary) {
+                html += `
+                    <div class="schedule-summary">
+                        <div class="summary-item">
+                            <div class="summary-value">${summary.total_sessions || 0}</div>
+                            <div class="summary-label">Sessions</div>
+                        </div>
+                        <div class="summary-item">
+                            <div class="summary-value">${summary.total_hours || 0}</div>
+                            <div class="summary-label">Hours</div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            // Sessions
+            const sessions = data.sessions || [];
+            if (sessions.length === 0) {
+                html += '<p style="text-align: center; color: #666;">No sessions to preview</p>';
+            } else {
+                sessions.forEach(session => {
+                    const startTime = new Date(session.start);
+                    const endTime = new Date(session.end);
+                    const timeStr = startTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) +
+                                   ' - ' + endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+                    html += `
+                        <div class="preview-session ${session.type}">
+                            <div class="preview-time">${timeStr}</div>
+                            <div class="preview-title">${session.title}</div>
+                            ${session.subject !== 'break' && session.subject !== 'general' ?
+                                `<div class="preview-subject">${session.subject}</div>` : ''}
+                        </div>
+                    `;
+                });
+            }
+
+            content.innerHTML = html;
+            preview.style.display = 'block';
+        }
+
+        function saveGeneratedSchedule(sessions) {
+            if (!sessions || sessions.length === 0) {
+                showStatus('No sessions to save', 'info');
+                return;
+            }
+
+            fetch('/api/schedule/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    sessions: sessions,
+                    link_to_tasks: true
+                })
+            })
+            .then(async response => {
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(data.message || data.error || 'Could not save schedule');
+                }
+                return data;
+            })
+            .then(data => {
+                if (data.status === 'error') {
+                    showStatus('❌ ' + data.message, 'error');
+                    return;
+                }
+
+                closeGenerateScheduleModal();
+
+                const message = `✅ Schedule saved! Created ${data.created} study sessions`;
+                showStatus(message, 'success');
+
+                calendar.refetchEvents();
+
+                setTimeout(() => hideStatus(), 5000);
+            })
+            .catch(error => {
+                console.error('Error saving schedule:', error);
+                showStatus('Error saving schedule: ' + error.message, 'error');
+            });
+        }
+
+        // Close modal on backdrop click
+        document.getElementById('generateScheduleModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeGenerateScheduleModal();
+            }
+        });
 
         function syncGoogleCalendar() {
             showStatus('🔄 Syncing with Google Calendar...', 'info');

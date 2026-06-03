@@ -260,6 +260,8 @@ function loadDeck(deck) {
     document.getElementById('cardFlip').style.display = '';
     document.getElementById('trafficControls').style.display = 'none';
     document.getElementById('cardNav') && (document.getElementById('cardNav').style.display = '');
+    document.getElementById('cardCounter') && (document.getElementById('cardCounter').style.display = '');
+    document.getElementById('sortPiles') && (document.getElementById('sortPiles').style.display = '');
 
     document.getElementById('deckTitle').textContent = deck.title;
     document.getElementById('deckMeta').textContent = `${deck.subject} · ${deck.module}`;
@@ -357,6 +359,10 @@ function checkSessionComplete() {
     document.getElementById('finalUnsure').textContent = FC.sort.unsure.length;
     document.getElementById('finalMissed').textContent = FC.sort.missed.length;
     document.getElementById('sessionComplete').classList.add('show');
+    
+    document.getElementById('cardNav').style.display = 'none';
+    document.getElementById('cardCounter').style.display = 'none';
+    document.getElementById('sortPiles').style.display = 'none';
 
     // Save result to the database for Progress tracking
     saveSessionResult();

@@ -11,7 +11,7 @@
   <body class="landing-body">
     <div class="intro-screen" id="intro-screen" aria-hidden="true">
       <div class="intro-logo" id="intro-logo">
-        <img src="{{ url_for('static', filename='images/transp512.png') }}" alt="Dusty logo">
+        <img src="{{ url_for('static', filename='images/animation.gif') }}" alt="Dusty logo">
       </div>
       <div class="broom" aria-hidden="true">
         <img src="{{ url_for('static', filename='images/mainicon.png') }}" alt="">
@@ -174,7 +174,7 @@
         document.body.classList.add('intro-finished');
         if (introScreen) {
           introScreen.classList.add('is-hidden');
-          window.setTimeout(() => introScreen.remove(), 900);
+          window.setTimeout(() => introScreen.remove(), 1500);
         }
       }
 
@@ -216,8 +216,8 @@
           if (introLogo) {
             introLogo.classList.add('is-visible');
           }
-        }, 3250);
-        window.setTimeout(finishIntro, 4400);
+        }, 3500);
+        window.setTimeout(finishIntro, 6000);
       }
 
       updateBookAnimation();

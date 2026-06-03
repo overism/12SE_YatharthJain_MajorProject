@@ -314,6 +314,147 @@ a { color: inherit; text-decoration: none; }
     .game-card{ min-width: 220px; max-width: 220px; }
 }
 
+.sidebar-menu-toggle {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    z-index: 1200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 14px;
+    background: rgba(17, 12, 8, 0.96);
+    color: #ffffff;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.sidebar-menu-toggle:hover {
+    transform: translateY(-1px);
+}
+
+.sidebar-menu-toggle .sidebar-menu-icon {
+    position: relative;
+    width: 20px;
+    height: 2px;
+    border-radius: 999px;
+    background: currentColor;
+    transition: transform 0.25s ease, opacity 0.2s ease, box-shadow 0.25s ease;
+}
+
+.sidebar-menu-toggle .sidebar-menu-icon::before,
+.sidebar-menu-toggle .sidebar-menu-icon::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    width: 20px;
+    height: 2px;
+    border-radius: 999px;
+    background: currentColor;
+    transition: transform 0.25s ease, top 0.25s ease, opacity 0.2s ease;
+}
+
+.sidebar-menu-toggle .sidebar-menu-icon::before {
+    top: -7px;
+}
+
+.sidebar-menu-toggle .sidebar-menu-icon::after {
+    top: 7px;
+}
+
+body.sidebar-open .sidebar-menu-toggle .sidebar-menu-icon {
+    background: transparent;
+}
+
+body.sidebar-open .sidebar-menu-toggle .sidebar-menu-icon::before {
+    top: 0;
+    transform: rotate(45deg);
+}
+
+body.sidebar-open .sidebar-menu-toggle .sidebar-menu-icon::after {
+    top: 0;
+    transform: rotate(-45deg);
+}
+
+.sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1090;
+    background: rgba(10, 8, 6, 0.52);
+    backdrop-filter: blur(2px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+}
+
+.sidebar-backdrop.is-visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+@media (max-width: 900px) {
+    .sidebar-menu-toggle {
+        display: inline-flex;
+    }
+
+    .sidebar {
+        width: min(84vw, 320px);
+        max-width: 320px;
+        transform: translateX(-105%);
+        transition: transform 0.28s ease, box-shadow 0.28s ease;
+        will-change: transform;
+        z-index: 1110;
+    }
+
+    .sidebar.is-open {
+        transform: translateX(0);
+    }
+
+    body.sidebar-open {
+        overflow: hidden;
+    }
+
+    .dash-container,
+    .profile-container,
+    .tasks-container,
+    .calendar-container,
+    .chat-container,
+    .flashcards-container,
+    .progress-container,
+    .resources-container,
+    .timer-container,
+    .page-loading {
+        left: 0 !important;
+        width: 100% !important;
+    }
+
+    .page-main {
+        margin-left: 0 !important;
+    }
+
+    .dash-header,
+    .profile-header,
+    .tasks-header,
+    .calendar-header,
+    .chat-header,
+    .flashcards-header,
+    .progress-header,
+    .resources-header,
+    .timer-header {
+        padding-top: 76px;
+    }
+}
+
+@media (min-width: 901px) {
+    .sidebar-backdrop {
+        display: none;
+    }
+}
+
 :root {
   --header-height: 0px;
 }
@@ -1214,10 +1355,11 @@ body.landing-body {
 .intro-logo {
     position: relative;
     z-index: 2;
-    width: min(480px, calc(100% - 56px));
+    left: 50px;
+    width: min(800px, calc(100% - 120px));
     text-align: center;
     opacity: 0;
-    transition: opacity 0.7s ease, transform 0.7s ease;
+    transition: opacity 1.5s ease, transform 1.5s ease;
 }
 
 .intro-logo.is-visible {
@@ -1261,7 +1403,7 @@ body.landing-body {
 }
 
 .landing-body {
-    animation: lock-scroll 16s forwards;
+    animation: lock-scroll 20s forwards;
 }
 
 @keyframes lock-scroll {
@@ -1844,5 +1986,134 @@ body.landing-body {
         right: 12px;
         bottom: 12px;
         width: calc(100vw - 24px);
+    }
+}
+
+.sidebar-menu-toggle {
+    position: fixed;
+    top: 16px;
+    left: 16px;
+    z-index: 1200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 48px;
+    height: 48px;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 14px;
+    background: rgba(17, 12, 8, 0.96);
+    color: #ffffff;
+    box-shadow: 0 12px 28px rgba(0, 0, 0, 0.25);
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+}
+
+.sidebar-menu-toggle:hover {
+    transform: translateY(-1px);
+}
+
+.sidebar-menu-toggle .sidebar-menu-icon {
+    position: relative;
+    width: 20px;
+    height: 2px;
+    border-radius: 999px;
+    background: currentColor;
+    transition: transform 0.25s ease, opacity 0.2s ease, box-shadow 0.25s ease;
+}
+
+.sidebar-menu-toggle .sidebar-menu-icon::before,
+.sidebar-menu-toggle .sidebar-menu-icon::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    width: 20px;
+    height: 2px;
+    border-radius: 999px;
+    background: currentColor;
+    transition: transform 0.25s ease, top 0.25s ease, opacity 0.2s ease;
+}
+
+.sidebar-menu-toggle .sidebar-menu-icon::before {
+    top: -7px;
+}
+
+.sidebar-menu-toggle .sidebar-menu-icon::after {
+    top: 7px;
+}
+
+body.sidebar-open .sidebar-menu-toggle .sidebar-menu-icon {
+    background: transparent;
+}
+
+body.sidebar-open .sidebar-menu-toggle .sidebar-menu-icon::before {
+    top: 0;
+    transform: rotate(45deg);
+}
+
+body.sidebar-open .sidebar-menu-toggle .sidebar-menu-icon::after {
+    top: 0;
+    transform: rotate(-45deg);
+}
+
+.sidebar-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 1090;
+    background: rgba(10, 8, 6, 0.52);
+    backdrop-filter: blur(2px);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s ease;
+}
+
+.sidebar-backdrop.is-visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+@media (max-width: 900px) {
+    .sidebar-menu-toggle {
+        display: inline-flex;
+    }
+
+    .sidebar {
+        width: min(84vw, 320px);
+        max-width: 320px;
+        transform: translateX(-105%);
+        transition: transform 0.28s ease, box-shadow 0.28s ease;
+        will-change: transform;
+        z-index: 1110;
+    }
+
+    .sidebar.is-open {
+        transform: translateX(0);
+    }
+
+    body.sidebar-open {
+        overflow: hidden;
+    }
+
+    .dash-container,
+    .profile-container,
+    .tasks-container,
+    .calendar-container,
+    .chat-container,
+    .flashcards-container,
+    .progress-container,
+    .resources-container,
+    .timer-container,
+    .page-loading {
+        left: 0 !important;
+        width: 100% !important;
+    }
+
+    .page-main {
+        margin-left: 0 !important;
+    }
+}
+
+@media (min-width: 901px) {
+    .sidebar-backdrop {
+        display: none;
     }
 }

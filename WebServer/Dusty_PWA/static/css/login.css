@@ -17,8 +17,8 @@ body{
 }
 
 .auth-logo{
-  position: fixed;
-  left: 12vw;
+  position: relative;
+  right: 16vw;
   z-index: 60;
   pointer-events: none;
   animation: logoEntrance 2s ease-out forwards;
@@ -61,6 +61,15 @@ body{
   box-shadow:0 6px 20px rgba(0,0,0,0.45);
   backdrop-filter: blur(6px);
   font-size:14px;
+}
+
+@media (max-width: 1920px) {
+  .auth-logo {
+    max-width: 1000px;
+  }
+  #logo {
+    width: 500px;
+  }
 }
 
 @media (max-width: 920px) {

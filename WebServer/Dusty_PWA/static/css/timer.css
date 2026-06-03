@@ -532,15 +532,18 @@
 
 /* Button Styles */
 .btn-primary,
-.btn-secondary,
 .btn-danger {
     padding: 12px 24px;
     border: none;
-    border-radius: 10px;
+    border-radius: 12px;
     font-weight: 600;
     cursor: pointer;
     transition: all 0.3s ease;
     font-size: 14px;
+}
+
+.btn-ghost {
+    border-radius: 12px;
 }
 
 .btn-primary {
@@ -551,16 +554,6 @@
 .btn-primary:hover {
     transform: translateY(-2px);
     box-shadow: 0 6px 20px rgba(245, 118, 28, 0.3);
-}
-
-.btn-secondary {
-    background: rgba(0,0,0,0.05);
-    color: #333;
-    border: 1px solid rgba(0,0,0,0.1);
-}
-
-.btn-secondary:hover {
-    background: rgba(0,0,0,0.1);
 }
 
 .btn-danger {

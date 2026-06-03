@@ -159,6 +159,59 @@
 
         .prefs-step-panel { display: none; }
         .prefs-step-panel.visible { display: block; }
+
+        .schedule-prefs-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+            margin-bottom: 24px;
+        }
+
+        .schedule-pref-item {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .schedule-pref-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: rgba(255,255,255,.65);
+        }
+
+        .schedule-pref-select {
+            padding: 11px 14px;
+            border-radius: 10px;
+            border: 1.5px solid rgba(255,255,255,.15);
+            background: rgba(255,255,255,.06);
+            color: #fff;
+            font-size: 13.5px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all .2s;
+        }
+
+        .schedule-pref-select:hover {
+            border-color: rgba(245,118,28,.5);
+            background: rgba(245,118,28,.08);
+        }
+
+        .schedule-pref-select:focus {
+            outline: none;
+            border-color: #f5761c;
+            box-shadow: 0 0 0 3px rgba(245,118,28,.15);
+        }
+
+        .schedule-pref-select option {
+            background: #1c1208;
+            color: #fff;
+        }
+
+        @media (max-width: 500px) {
+            .schedule-prefs-grid {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
   </head>
   <script>
@@ -224,6 +277,7 @@
             <div class="prefs-steps">
                 <div class="prefs-step active" id="step0"></div>
                 <div class="prefs-step" id="step1"></div>
+                <div class="prefs-step" id="step2"></div>
             </div>
 
             <div class="prefs-step-panel visible" id="stepPanel0">
@@ -240,6 +294,76 @@
                 <div class="colour-assignments" id="colourAssignments"></div>
                 <div class="prefs-actions">
                     <button class="btn-prefs-skip" type="button" onclick="goToStep1()">← Back</button>
+                    <button class="btn-prefs-save" type="button" id="nextStep3Btn" onclick="goToStep3()">Schedule Settings →</button>
+                </div>
+            </div>
+
+            <!-- Step 3: Scheduling Preferences -->
+            <div class="prefs-step-panel" id="stepPanel2">
+                <p class="prefs-section-label">Study Schedule</p>
+
+                <div class="schedule-prefs-grid">
+                    <div class="schedule-pref-item">
+                        <label class="schedule-pref-label">Study Start Time</label>
+                        <select id="studyStartTime" class="schedule-pref-select">
+                            <option value="6">6:00 AM</option>
+                            <option value="7">7:00 AM</option>
+                            <option value="8" selected>8:00 AM</option>
+                            <option value="9">9:00 AM</option>
+                            <option value="10">10:00 AM</option>
+                        </select>
+                    </div>
+                    <div class="schedule-pref-item">
+                        <label class="schedule-pref-label">Study End Time</label>
+                        <select id="studyEndTime" class="schedule-pref-select">
+                            <option value="20">8:00 PM</option>
+                            <option value="21">9:00 PM</option>
+                            <option value="22" selected>10:00 PM</option>
+                            <option value="23">11:00 PM</option>
+                        </select>
+                    </div>
+                    <div class="schedule-pref-item">
+                        <label class="schedule-pref-label">Sleep Time</label>
+                        <select id="sleepStartTime" class="schedule-pref-select">
+                            <option value="21">9:00 PM</option>
+                            <option value="22" selected>10:00 PM</option>
+                            <option value="23">11:00 PM</option>
+                            <option value="0">12:00 AM</option>
+                        </select>
+                    </div>
+                    <div class="schedule-pref-item">
+                        <label class="schedule-pref-label">Wake Up Time</label>
+                        <select id="sleepEndTime" class="schedule-pref-select">
+                            <option value="5">5:00 AM</option>
+                            <option value="6">6:00 AM</option>
+                            <option value="7" selected>7:00 AM</option>
+                            <option value="8">8:00 AM</option>
+                        </select>
+                    </div>
+                    <div class="schedule-pref-item">
+                        <label class="schedule-pref-label">Max Daily Study</label>
+                        <select id="maxDailyStudy" class="schedule-pref-select">
+                            <option value="2">2 hours</option>
+                            <option value="3">3 hours</option>
+                            <option value="4" selected>4 hours</option>
+                            <option value="5">5 hours</option>
+                            <option value="6">6 hours</option>
+                        </select>
+                    </div>
+                    <div class="schedule-pref-item">
+                        <label class="schedule-pref-label">Default Session</label>
+                        <select id="sessionDuration" class="schedule-pref-select">
+                            <option value="30">30 minutes</option>
+                            <option value="45">45 minutes</option>
+                            <option value="60" selected>1 hour</option>
+                            <option value="90">1.5 hours</option>
+                            <option value="120">2 hours</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="prefs-actions">
+                    <button class="btn-prefs-skip" type="button" onclick="goToStep2()">← Back</button>
                     <button class="btn-prefs-save" type="button" id="savePrefsBtn" onclick="savePreferences()" method="POST">Save &amp; Get Started 🚀</button>
                 </div>
                 <p class="prefs-note">You can change these anytime from your Profile settings.</p>

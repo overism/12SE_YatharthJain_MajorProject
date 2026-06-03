@@ -56,25 +56,14 @@
     <div class="dash-container">
         <!-- HEADER -->
             <header class="dash-header">
-                <div>
-                    <h1 class="dash-title">Dashboard</h1>
+            <div class="dash-header-left">
+                <h1 class="dash-title">Dashboard</h1>
                 <p class="dash-sub" id="greetingSub">Welcome back!</p>
             </div>
             <div class="dash-header-right">
-                <a class="btn btn-ghost" href="{{ url_for('profile') }}">👤 Profile</a>
-                <a class="btn btn-secondary" href="{{ url_for('logout') }}">Log out</a>
+                <a class="dash-user-btn" href="{{ url_for('profile') }}" title="Profile"><img src="{{ url_for('static', filename='images/user-icon.svg') }}" alt="User Icon"></a>
             </div>
         </header>
-
-        <!-- TOP SEARCH BAR -->
-        <div class="dash-topbar">
-            <div class="dash-search">
-                <input id="dashSearch" type="search" placeholder="search bar" aria-label="Search">
-                <button onclick="doSearch()">Search</button>
-            </div>
-            <a class="dash-user-btn" href="{{ url_for('profile') }}" title="Profile">👤</a>
-        </div>
-
         <div class="dash-inner">
 
             <!-- ══ FIXED STATS STRIP (not draggable) ══ -->
@@ -98,10 +87,10 @@
                     </div>
                     <div class="widget-body">
                         <div class="subjects-grid" id="subjectsGrid">
-                            <div class="shimmer" style="height:80px;border-radius:14px"></div>
-                            <div class="shimmer" style="height:80px;border-radius:14px"></div>
-                            <div class="shimmer" style="height:80px;border-radius:14px"></div>
-                            <div class="shimmer" style="height:80px;border-radius:14px"></div>
+                            <div class="shimmer" style="border-radius:14px"></div>
+                            <div class="shimmer" style="border-radius:14px"></div>
+                            <div class="shimmer" style="border-radius:14px"></div>
+                            <div class="shimmer" style="border-radius:14px"></div>
                         </div>
                     </div>
                 </div>
@@ -170,16 +159,16 @@
                     <div class="widget-body">
                         <div class="quick-grid">
                             <a class="quick-btn" href="{{ url_for('chat') }}">
-                                <span class="quick-btn-icon">🤖</span>AI Study Helper
+                                <span class="quick-btn-icon"><img src="/static/images/icon-192.png" width="50" height="50" alt="AI Study Helper"></span>AI Study Helper
                             </a>
                             <a class="quick-btn" href="{{ url_for('resources') }}">
-                                <span class="quick-btn-icon">📤</span>Upload Notes
+                                <span class="quick-btn-icon"><img src="/static/images/notes-icon.svg" width="50" height="50" alt="Upload Notes"></span>Upload Notes
                             </a>
                             <a class="quick-btn" href="{{ url_for('chat') }}?mode=generate">
-                                <span class="quick-btn-icon">📝</span>Practice Exam
+                                <span class="quick-btn-icon"><img src="/static/images/exam-icon.svg" width="50" height="50" alt="Practice Exam"></span>Practice Exam
                             </a>
                             <a class="quick-btn" href="{{ url_for('timer') }}">
-                                <span class="quick-btn-icon">📅</span>Plan Study Session
+                                <span class="quick-btn-icon"><img src="/static/images/calendar-icon.svg" width="50" height="50" alt="Plan Study Session"></span>Plan Study Session
                             </a>
                         </div>
                     </div>

@@ -17,6 +17,7 @@ from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from datetime import datetime, timedelta
+import scheduler
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 GOOGLE_SCOPES = ['https://www.googleapis.com/auth/calendar']
@@ -131,6 +132,78 @@ def ensure_user_subjects(conn, user_id):
                 (user_id, name, colour, idx)
             )
         conn.commit()
+
+
+DEFAULT_SCHEDULER_SETTINGS = {
+    'study_start': 8,
+    'study_end': 22,
+    'sleep_start': 22,
+    'sleep_end': 7,
+    'school_start': 9,
+    'school_end': 15,
+    'session_duration': 60,
+    'break_duration': 10,
+    'max_daily_hours': 4,
+    'priority_subjects': [],
+    'scheduler_onboarded': False,
+    'study_techniques': ["Spaced Reptition", "Active Recall", "Blurting", "Stop Light Method", "Interleaving", "Retrieval Practice", "Exam Style Questions", "Error Analysis", "Worked Examples", "Past Paper Practice"]
+}
+
+
+def _coerce_int(value, default, minimum=None, maximum=None):
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        number = default
+    if minimum is not None:
+        number = max(minimum, number)
+    if maximum is not None:
+        number = min(maximum, number)
+    return number
+
+
+def _load_user_settings(raw_settings):
+    if not raw_settings:
+        return {}
+    if isinstance(raw_settings, dict):
+        return raw_settings
+    try:
+        parsed = json.loads(raw_settings)
+        return parsed if isinstance(parsed, dict) else {}
+    except Exception:
+        return {}
+
+
+def _scheduler_settings_from(settings):
+    scheduler_settings = dict(DEFAULT_SCHEDULER_SETTINGS)
+    scheduler_settings.update({
+        'study_start': _coerce_int(settings.get('study_start'), 8, 0, 23),
+        'study_end': _coerce_int(settings.get('study_end'), 22, 1, 24),
+        'sleep_start': _coerce_int(settings.get('sleep_start'), 22, 0, 23),
+        'sleep_end': _coerce_int(settings.get('sleep_end'), 7, 0, 23),
+        'school_start': _coerce_int(settings.get('school_start'), 9, 0, 23),
+        'school_end': _coerce_int(settings.get('school_end'), 15, 1, 24),
+        'session_duration': _coerce_int(settings.get('session_duration'), 60, 20, 180),
+        'break_duration': _coerce_int(settings.get('break_duration'), 10, 0, 60),
+        'max_daily_hours': _coerce_int(settings.get('max_daily_hours'), 4, 1, 10),
+        'priority_subjects': settings.get('priority_subjects')
+            if isinstance(settings.get('priority_subjects'), list)
+            else [],
+        'study_techniques': settings.get('study_techniques')
+            if isinstance(settings.get('study_techniques'), list)
+            else DEFAULT_SCHEDULER_SETTINGS['study_techniques'],
+        'scheduler_onboarded': bool(settings.get('scheduler_onboarded')),
+    })
+    return scheduler_settings
+
+
+def _scheduler_onboarding_complete(settings):
+    required_keys = (
+        'study_start', 'study_end', 'sleep_start', 'sleep_end',
+        'school_start', 'school_end', 'session_duration',
+        'break_duration', 'max_daily_hours', 'study_techniques'
+    )
+    return bool(settings.get('scheduler_onboarded')) and all(key in settings for key in required_keys)
 
 
 def _normalize_relative_path(path):
@@ -355,19 +428,46 @@ def api_get_subjects():
         print('[API /api/subjects] Error:', e)
         return jsonify({'error': 'Could not load subjects'}), 500
 
-@app.route('/api/user/preferences', methods=['POST'])
+@app.route('/api/user/preferences', methods=['GET', 'POST'])
 @login_required
 def api_user_preferences():
-    """Save user preferences (theme and selected subjects) in users.userSettings JSON column."""
+    """Load or save user preferences in users.userSettings JSON column."""
     user_id = session.get('user_id')
+
+    if request.method == 'GET':
+        try:
+            conn = get_db_connection()
+            ensure_user_subjects(conn, user_id)
+            user = conn.execute('SELECT userSettings FROM users WHERE userID = ?', (user_id,)).fetchone()
+            settings = _load_user_settings(user['userSettings'] if user else None)
+            subjects = conn.execute(
+                'SELECT subjectID, subjectName, colourScheme FROM subjects WHERE userID = ? ORDER BY sortOrder, subjectID',
+                (user_id,)
+            ).fetchall()
+            conn.close()
+            scheduler_settings = _scheduler_settings_from(settings)
+            return jsonify({
+                'success': True,
+                'theme': settings.get('theme', 'light'),
+                'subjects': [dict(row) for row in subjects],
+                'scheduler': scheduler_settings,
+                'needsSchedulerOnboarding': not _scheduler_onboarding_complete(settings),
+            })
+        except Exception as e:
+            print('[API /api/user/preferences GET] Error:', e)
+            return jsonify({'error': 'Could not load preferences'}), 500
+
     data = request.get_json() or {}
     theme = data.get('theme')
     selected = data.get('subjects') or []
+    scheduler_data = data.get('scheduler') or {}
     # Validate simple shape
     if theme not in (None, 'light', 'dark'):
         return jsonify({'error': 'Invalid theme value'}), 400
     if not isinstance(selected, list):
         return jsonify({'error': 'Invalid subjects list'}), 400
+    if not isinstance(scheduler_data, dict):
+        return jsonify({'error': 'Invalid scheduler preferences'}), 400
 
     normalized = []
     for item in selected:
@@ -430,14 +530,73 @@ def api_user_preferences():
                 (item['colourScheme'], user_id, item['subjectID'])
             )
 
-        prefs = {'theme': theme}
+        existing = conn.execute('SELECT userSettings FROM users WHERE userID = ?', (user_id,)).fetchone()
+        prefs = _load_user_settings(existing['userSettings'] if existing else None)
+        if theme:
+            prefs['theme'] = theme
+        prefs['subjects'] = [
+            {
+                'subjectID': item['subjectID'],
+                'subjectName': item.get('subjectName'),
+                'colourScheme': item['colourScheme'],
+            }
+            for item in normalized
+        ]
+
+        if scheduler_data:
+            prefs.update({
+                'study_start': _coerce_int(scheduler_data.get('study_start'), 8, 0, 23),
+                'study_end': _coerce_int(scheduler_data.get('study_end'), 22, 1, 24),
+                'sleep_start': _coerce_int(scheduler_data.get('sleep_start'), 22, 0, 23),
+                'sleep_end': _coerce_int(scheduler_data.get('sleep_end'), 7, 0, 23),
+                'school_start': _coerce_int(scheduler_data.get('school_start'), 9, 0, 23),
+                'school_end': _coerce_int(scheduler_data.get('school_end'), 15, 1, 24),
+                'session_duration': _coerce_int(scheduler_data.get('session_duration'), 60, 20, 180),
+                'break_duration': _coerce_int(scheduler_data.get('break_duration'), 10, 0, 60),
+                'max_daily_hours': _coerce_int(scheduler_data.get('max_daily_hours'), 4, 1, 10),
+                'priority_subjects': (
+                    scheduler_data.get('priority_subjects')
+                    if isinstance(scheduler_data.get('priority_subjects'), list)
+                    else []
+                ),
+                'study_techniques': (
+                    scheduler_data.get('study_techniques')
+                    if isinstance(scheduler_data.get('study_techniques'), list)
+                    else DEFAULT_SCHEDULER_SETTINGS['study_techniques']
+                ),
+                'scheduler_onboarded': bool(scheduler_data.get('scheduler_onboarded', True)),
+            })
+
+        print(json.dumps(prefs, indent=2))    
+
         conn.execute('UPDATE users SET userSettings = ? WHERE userID = ?', (json.dumps(prefs), user_id))
         conn.commit()
         conn.close()
-        return jsonify({'success': True})
+        return jsonify({
+            'success': True,
+            'needsSchedulerOnboarding': not _scheduler_onboarding_complete(prefs)
+        })
     except Exception as e:
         print('[API /api/user/preferences] Error:', e)
         return jsonify({'error': 'Could not save preferences'}), 500
+
+
+@app.route('/api/user/onboarding-status', methods=['GET'])
+@login_required
+def api_user_onboarding_status():
+    user_id = session.get('user_id')
+    try:
+        conn = get_db_connection()
+        row = conn.execute('SELECT userSettings FROM users WHERE userID = ?', (user_id,)).fetchone()
+        conn.close()
+        settings = _load_user_settings(row['userSettings'] if row else None)
+        return jsonify({
+            'success': True,
+            'needsSchedulerOnboarding': not _scheduler_onboarding_complete(settings)
+        })
+    except Exception as e:
+        print('[API /api/user/onboarding-status] Error:', e)
+        return jsonify({'error': 'Could not check onboarding status'}), 500
 
 # Serve manifest & service worker from project root
 @app.route('/manifest.json')
@@ -700,16 +859,36 @@ def get_google_service(user_id):
 
     if credentials.expired and credentials.refresh_token:
         from google.auth.transport.requests import Request
-        credentials.refresh(Request())
+        from google.auth.exceptions import RefreshError
 
-        # Update the database with refreshed token
-        conn = get_db_connection()
-        conn.execute("""
-            UPDATE google_creds SET accessToken=?, expiry=?
-            WHERE userID=?
-        """, (credentials.token, credentials.expiry.isoformat(), user_id))
-        conn.commit()
-        conn.close()
+        try:
+            credentials.refresh(Request())
+
+            conn = get_db_connection()
+            conn.execute("""
+                UPDATE google_creds
+                SET accessToken=?, expiry=?
+                WHERE userID=?
+            """, (
+                credentials.token,
+                credentials.expiry.isoformat(),
+                user_id
+            ))
+            conn.commit()
+            conn.close()
+
+        except RefreshError as e:
+            print(f"[GOOGLE REFRESH ERROR] {e}")
+
+            conn = get_db_connection()
+            conn.execute(
+                "DELETE FROM google_creds WHERE userID=?",
+                (user_id,)
+            )
+            conn.commit()
+            conn.close()
+
+            return None
 
     return build('calendar', 'v3', credentials=credentials)
 
@@ -1087,7 +1266,14 @@ def timer():
 @app.route('/chat')
 @login_required
 def chat():
-    return render_template('chat.html')
+    user_id = session.get('user_id')
+    conn = get_db_connection()
+    user = conn.execute(
+        'SELECT userName, userEmail, userPfp FROM users WHERE userID = ?',
+        (user_id,)
+    ).fetchone()
+    conn.close()
+    return render_template('chat.html', user=user)
 
 @app.route('/flashcards')
 @login_required
@@ -1255,78 +1441,224 @@ def google_event_body(title, description, start_time, end_time):
 def check_overlap(start_time, end_time, user_id, exclude_event_id=None):
     """Check if a time slot overlaps with existing events."""
     conn = get_db_connection()
-    query = "SELECT COUNT(*) as count FROM events WHERE userID = ? AND isDeleted = 0 AND startTime < ? AND endTime > ?"
+    query = """
+        SELECT COUNT(*) as count
+        FROM events
+        WHERE userID = ?
+        AND isDeleted = 0
+        AND startTime < ?
+        AND endTime > ?
+    """
+
     params = [user_id, end_time, start_time]
-    
-    if exclude_event_id:
+
+    if exclude_event_id is not None:
         query += " AND eventID != ?"
         params.append(exclude_event_id)
-    
+
     result = conn.execute(query, params).fetchone()
     conn.close()
+
     return result['count'] > 0
 
+def round_up_to_interval(dt, interval_minutes=15):
+    """Round datetime up to nearest interval."""
+    if dt.minute % interval_minutes == 0 and dt.second == 0 and dt.microsecond == 0:
+        return dt
+    
+    discard = timedelta(
+        minutes=dt.minute % interval_minutes,
+        seconds=dt.second,
+        microseconds=dt.microsecond
+    )
+
+    dt = dt - discard
+    dt += timedelta(minutes=interval_minutes)
+
+    discard = timedelta(
+        minutes=dt.minute % interval_minutes,
+        seconds=dt.second,
+        microseconds=dt.microsecond
+    )
+
+    dt = dt - discard
+    dt += timedelta(minutes=interval_minutes)
+
+    return dt
 
 def find_available_slot(duration_minutes, user_id, before_date=None):
-    """Find the next available time slot for the specified duration."""
-    WORK_START_HOUR = 8
-    WORK_END_HOUR = 22
-    
+    """
+    Find next available slot.
+
+    ```
+    Respects:
+    - User study hours
+    - User school hours
+    - Existing calendar events
+    - Deadline/exam dates
+    - 15 minute alignment
+    """
+
+    now = datetime.now()
+
     conn = get_db_connection()
-    
-    search_date = datetime.now().replace(hour=WORK_START_HOUR, minute=0, second=0, microsecond=0)
-    
-    for day_offset in range(14):
-        current_date = search_date + timedelta(days=day_offset)
-        
+
+    try:
+        user_row = conn.execute(
+            "SELECT userSettings FROM users WHERE userID = ?",
+            (user_id,)
+        ).fetchone()
+
+        settings = {}
+
+        if user_row and user_row["userSettings"]:
+            try:
+                settings = json.loads(user_row["userSettings"])
+            except Exception:
+                settings = {}
+
+        study_start_hour = int(settings.get("study_start", 8))
+        study_end_hour = int(settings.get("study_end", 22))
+
+        school_start_hour = settings.get("school_start")
+        school_end_hour = settings.get("school_end")
+
+        deadline = None
+
         if before_date:
             try:
-                before = parse_calendar_dt(before_date)
+                deadline = parse_calendar_dt(before_date)
             except Exception:
-                before = current_date + timedelta(days=14)
-            
-            if current_date.date() > before.date():
-                conn.close()
-                return None
-        
-        date_str = current_date.strftime('%Y-%m-%d')
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT startTime, endTime FROM events
-            WHERE userID = ? AND DATE(startTime) = ? AND isDeleted = 0
-            ORDER BY startTime
-        """, (user_id, date_str))
-        
-        events = cursor.fetchall()
-        
-        busy = []
-        for event in events:
-            try:
-                busy.append((parse_calendar_dt(event['startTime']), parse_calendar_dt(event['endTime'])))
-            except Exception:
-                continue
-        busy.sort(key=lambda pair: pair[0])
+                deadline = None
 
-        slot_start = current_date.replace(hour=WORK_START_HOUR, minute=0, second=0, microsecond=0)
-        if slot_start < datetime.now():
-            slot_start = datetime.now().replace(second=0, microsecond=0) + timedelta(minutes=15)
-        day_end = current_date.replace(hour=WORK_END_HOUR, minute=0, second=0, microsecond=0)
+        search_start = now.replace(
+            hour=study_start_hour,
+            minute=0,
+            second=0,
+            microsecond=0
+        )
 
-        for e_start, e_end in busy:
-            slot_end = slot_start + timedelta(minutes=duration_minutes)
-            if slot_end <= e_start and slot_end <= day_end:
-                conn.close()
-                return {'start': slot_start.isoformat(), 'end': slot_end.isoformat()}
-            if slot_start < e_end:
-                slot_start = e_end
+        if search_start < now:
+            search_start = now
 
-        slot_end = slot_start + timedelta(minutes=duration_minutes)
-        if slot_end <= day_end:
-            conn.close()
-            return {'start': slot_start.isoformat(), 'end': slot_end.isoformat()}
-    
-    conn.close()
-    return None
+        max_search_days = 365
+
+        for day_offset in range(max_search_days):
+
+            current_date = search_start + timedelta(days=day_offset)
+
+            if deadline and current_date > deadline:
+                break
+
+            date_str = current_date.strftime("%Y-%m-%d")
+
+            events = conn.execute(
+                """
+                SELECT startTime, endTime
+                FROM events
+                WHERE userID = ?
+                AND DATE(startTime) = ?
+                AND isDeleted = 0
+                ORDER BY startTime
+                """,
+                (user_id, date_str)
+            ).fetchall()
+
+            busy = []
+
+            for event in events:
+                try:
+                    busy.append((
+                        parse_calendar_dt(event["startTime"]),
+                        parse_calendar_dt(event["endTime"])
+                    ))
+                except Exception:
+                    pass
+
+            if (
+                school_start_hour is not None and
+                school_end_hour is not None
+            ):
+                try:
+                    school_start = current_date.replace(
+                        hour=int(school_start_hour),
+                        minute=0,
+                        second=0,
+                        microsecond=0
+                    )
+
+                    school_end = current_date.replace(
+                        hour=int(school_end_hour),
+                        minute=0,
+                        second=0,
+                        microsecond=0
+                    )
+
+                    busy.append((school_start, school_end))
+
+                except Exception:
+                    pass
+
+            busy.sort(key=lambda x: x[0])
+
+            slot_start = current_date.replace(
+                hour=study_start_hour,
+                minute=0,
+                second=0,
+                microsecond=0
+            )
+
+            if slot_start < now:
+                slot_start = round_up_to_interval(now)
+
+            day_end = current_date.replace(
+                hour=study_end_hour,
+                minute=0,
+                second=0,
+                microsecond=0
+            )
+
+            for busy_start, busy_end in busy:
+
+                slot_end = slot_start + timedelta(
+                    minutes=duration_minutes
+                )
+
+                if (
+                    slot_end <= busy_start and
+                    slot_end <= day_end
+                ):
+
+                    if deadline and slot_end > deadline:
+                        break
+
+                    return {
+                        "start": slot_start.isoformat(),
+                        "end": slot_end.isoformat()
+                    }
+
+                if slot_start < busy_end:
+                    slot_start = round_up_to_interval(busy_end)
+
+            slot_end = slot_start + timedelta(
+                minutes=duration_minutes
+            )
+
+            if slot_end <= day_end:
+
+                if deadline and slot_end > deadline:
+                    continue
+
+                return {
+                    "start": slot_start.isoformat(),
+                    "end": slot_end.isoformat()
+                }
+
+        return None
+
+    finally:
+        conn.close()
+
 
 
 @app.route('/calendar/events', methods=['GET'])
@@ -1602,7 +1934,11 @@ def generate_schedule():
         tasks = cursor.fetchall()
         created_events = []
         failed_tasks = []
-        service = get_google_service(user_id)
+        service = None
+        try:
+            service = get_google_service(user_id)
+        except Exception as e:
+            print(f"[GOOGLE SERVICE ERROR] {e}")
         
         for task in tasks:
             duration = 60
@@ -1610,6 +1946,13 @@ def generate_schedule():
             
             slot = find_available_slot(duration, user_id, before_date=due_date)
             
+            if check_overlap(
+                slot['start'],
+                slot['end'],
+                user_id
+            ):
+                continue
+
             if slot:
                 title = f"Study: {task['title']}"
                 description = task['description'] or f"Study task: {task['title']}"
@@ -1675,6 +2018,475 @@ def generate_schedule():
         conn.close()
 
 
+# ============= SMART SCHEDULE API =============
+
+@app.route('/api/schedule/generate', methods=['POST'])
+@login_required
+def smart_generate_schedule():
+    """
+    Generate an intelligent study schedule based on user input and existing data.
+
+    This is the NEW comprehensive schedule generation that:
+    1. Collects ALL user data (tasks, exams, events, subjects, free slots)
+    2. Passes data to Gemini with evidence-based study techniques
+    3. Allocates sessions to available free time windows
+    4. Creates meaningful event names
+    5. Uses user subject colours from database
+    """
+    user_id = session.get('user_id')
+    data = request.get_json() or {}
+
+    print(f"\n{'='*60}")
+    print(f"[API_SCHEDULE] Starting NEW schedule generation for user {user_id}")
+    print(f"{'='*60}")
+
+    try:
+        conn = get_db_connection()
+
+        # Get user preferences
+        user_preferences = get_user_preferences(conn, user_id)
+        request_preferences = data.get('preferences') or {}
+        if isinstance(request_preferences, dict):
+            for key in ('study_start', 'study_end', 'sleep_start', 'sleep_end', 'school_start',
+                        'school_end', 'session_duration', 'break_duration', 'max_daily_hours'):
+                if key in request_preferences:
+                    user_preferences[key] = _coerce_int(request_preferences.get(key), user_preferences.get(key))
+            if isinstance(request_preferences.get('priority_subjects'), list):
+                user_preferences['priority_subjects'] = request_preferences['priority_subjects']
+            if isinstance(request_preferences.get('study_techniques'), list):
+                user_preferences['study_techniques'] = request_preferences['study_techniques']
+
+        # Build options
+        options = {
+            'max_daily_hours': user_preferences.get('max_daily_hours', 4),
+            'session_duration': user_preferences.get('session_duration', 60),
+            'break_duration': user_preferences.get('break_duration', 10),
+            'include_breaks': True,
+        }
+        if isinstance(data.get('options'), dict):
+            options.update(data.get('options'))
+
+        # Get user's prompt
+        user_prompt = data.get('freeform_text', '') or "Create a study schedule for my pending tasks and exams."
+
+        print(f"[API_SCHEDULE] User prompt: {user_prompt}")
+        print(f"[API_SCHEDULE] User preferences: study {user_preferences.get('study_start')}:00-{user_preferences.get('study_end')}:00")
+
+        # ========== NEW: Collect all user data ==========
+        print(f"[API_SCHEDULE] Collecting user data from database...")
+        user_data = scheduler.collect_user_data(conn, user_id, user_preferences)
+
+        print(f"[API_SCHEDULE] Collected:")
+        print(f"  - Tasks: {len(user_data['tasks'])}")
+        print(f"  - Exams: {len(user_data['exams'])}")
+        print(f"  - Events: {len(user_data['events'])}")
+        print(f"  - Subjects: {len(user_data['subjects'])}")
+        print(f"  - Free slots: {len(user_data['free_slots'])}")
+        print(f"  - Subject colour map: {user_data['subject_colour_map']}")
+        print(f"[API_SCHEDULE] User preferences: {user_preferences}")
+        print(f"[API_SCHEDULE] Options: {options}")
+        print(f"[API_SCHEDULE] Techniques: {user_preferences.get('study_techniques', [])}")
+
+        # ========== Call Gemini with full context ==========
+        print(f"[API_SCHEDULE] Calling Gemini for intelligent schedule generation...")
+
+        gemini_result = scheduler.generate_smart_schedule_with_gemini(
+            user_prompt=user_prompt,
+            user_data=user_data,
+            user_preferences=user_preferences,
+            options=options
+        )
+
+        print(f"[API_SCHEDULE] Gemini result: error={gemini_result.get('error')}, sessions={len(gemini_result.get('sessions', []))}")
+
+        # Check if Gemini succeeded
+        if gemini_result.get('sessions') and not gemini_result.get('error'):
+            sessions = gemini_result['sessions']
+            summary = gemini_result.get('summary', {})
+            reasoning = gemini_result.get('reasoning', '')
+            techniques = gemini_result.get('techniques_used', [])
+
+            print(f"[API_SCHEDULE] SUCCESS - Generated {len(sessions)} sessions")
+            print(f"[API_SCHEDULE] Techniques: {techniques}")
+            print(f"[API_SCHEDULE] Summary: {summary}")
+
+            conn.close()
+            return jsonify({
+                'status': 'success',
+                'sessions': sessions,
+                'summary': summary,
+                'reasoning': reasoning,
+                'techniques_used': techniques,
+                'source': 'gemini'
+            }), 200
+
+        # ========== Fallback if Gemini fails ==========
+        print(f"[API_SCHEDULE] Gemini failed or returned error: {gemini_result.get('error')}")
+        print(f"[API_SCHEDULE] Using fallback local scheduler...")
+
+        # Build schedule items from tasks and exams
+        schedule_items = []
+
+        # Add tasks from the collected data
+        for task in user_data['tasks']:
+            schedule_items.append({
+                'id': task.get('id'),
+                'title': task.get('title', 'Task'),
+                'due_date': task.get('due_date'),
+                'type': task.get('type', 'study'),
+                'subject': task.get('subject', 'general')
+            })
+
+        # Add exams
+        for exam in user_data['exams']:
+            schedule_items.append({
+                'title': exam.get('title', 'Exam'),
+                'due_date': exam.get('exam_date'),
+                'type': 'exam',
+                'subject': exam.get('subject', 'general')
+            })
+
+        # If still no items, create some generic study sessions
+        if not schedule_items:
+            print(f"[API_SCHEDULE] No tasks/exams found, creating generic study sessions")
+            for subj in user_data['subjects'][:3]:
+                schedule_items.append({
+                    'title': f"{subj['subjectName']} Revision",
+                    'due_date': None,
+                    'type': 'revision',
+                    'subject': subj['subjectName']
+                })
+
+        # Use the free slots we calculated and allocate locally
+        # (This is a simplified fallback - ideally Gemini handles this)
+        from datetime import timedelta
+
+        allocated = []
+        used_dates = set()
+
+        for i, item in enumerate(schedule_items[:10]):  # Limit to 10 sessions
+            # Find a slot
+            for slot in user_data['free_slots']:
+                date_key = slot['start'].strftime('%Y-%m-%d')
+                if date_key in used_dates:
+                    continue
+                if slot['duration_minutes'] < 45:
+                    continue
+
+                allocated.append({
+                    'title': item.get('title', 'Study Session'),
+                    'subject': item.get('subject', 'General'),
+                    'start': slot['start'].isoformat(),
+                    'end': (slot['start'] + timedelta(minutes=60)).isoformat(),
+                    'duration_minutes': 60,
+                    'priority': 'normal',
+                    'strategy': 'Study',
+                    'description': f"Study session for {item.get('title')}",
+                    'colour': user_data['subject_colour_map'].get(item.get('subject', '').lower(), '#f5761b'),
+                    'type': 'study'
+                })
+                used_dates.add(date_key)
+                break
+
+        summary = scheduler.get_schedule_summary(allocated)
+
+        print(f"[API_SCHEDULE] Fallback generated {len(allocated)} sessions")
+        conn.close()
+
+        return jsonify({
+            'status': 'success',
+            'sessions': allocated,
+            'summary': summary,
+            'reasoning': 'Generated using local scheduler after Gemini failed',
+            'source': 'fallback'
+        }), 200
+
+    except Exception as e:
+        print(f'[API_SCHEDULE] Error: {e}')
+        import traceback
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/schedule/save', methods=['POST'])
+@login_required
+def save_generated_schedule():
+    """
+    Save the generated study sessions to the calendar.
+
+    Each session should contain:
+    - title: The study session title
+    - start: Start datetime ISO format
+    - end: End datetime ISO format
+    - colour: Subject colour (from user's saved preferences)
+    - description: Strategy and reasoning info
+    - task_id: Related task ID (optional)
+    - exam_id: Related exam ID (optional)
+    """
+    user_id = session.get('user_id')
+    data = request.get_json() or {}
+
+    sessions = data.get('sessions', [])
+    link_to_tasks = data.get('link_to_tasks', True)
+
+    if not sessions:
+        return jsonify({'error': 'No sessions to save'}), 400
+
+    print(f"\n{'='*60}")
+    print(f"[API_SCHEDULE_SAVE] Saving {len(sessions)} sessions for user {user_id}")
+    print(f"{'='*60}")
+
+    conn = None
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+
+        created_events = []
+        default_color = get_event_color('auto')
+        service = None
+
+        # Try to get Google service but don't fail if not available
+        try:
+            service = get_google_service(user_id)
+            if service:
+                print(f"[API_SCHEDULE_SAVE] Google Calendar connected")
+            else:
+                print(f"[API_SCHEDULE_SAVE] Google Calendar not connected - will save locally only")
+        except Exception as e:
+            print(f"[GOOGLE SERVICE ERROR] {e} - continuing without Google sync")
+
+        for sesh in sessions:
+            if sesh.get('type') == 'break':
+                continue
+
+            if not isinstance(sesh, dict):
+                continue
+
+            try:
+                start_time = datetime.fromisoformat(sesh['start'])
+                end_time = datetime.fromisoformat(sesh['end'])
+            except Exception as e:
+                print(f"[SCHEDULE_SAVE] Invalid time format: {e}")
+                continue
+
+            if end_time <= start_time:
+                print("[SCHEDULE_SAVE] Skipping session with non-positive duration")
+                continue
+
+            # Get description - can be in 'notes' or 'description' field
+            description = sesh.get('description') or sesh.get('notes', '')
+
+            # Get colour - prefer session colour, fallback to default
+            colour = sesh.get('colour') or sesh.get('color') or default_color
+
+            print(f"[API_SCHEDULE_SAVE] Creating event: {sesh.get('title')} at {sesh.get('start')}")
+
+            cursor.execute("""
+                INSERT INTO events
+                (userID, title, description, startTime, endTime, source, color, isDeleted)
+                VALUES (?, ?, ?, ?, ?, 'auto', ?, 0)
+            """, (
+                user_id,
+                sesh.get('title', 'Study Session'),
+                description,
+                start_time.isoformat(),
+                end_time.isoformat(),
+                colour
+            ))
+
+            event_id = cursor.lastrowid
+            google_event_id = None
+
+            # Sync to Google Calendar if connected - DON'T let failure break saving
+            if service:
+                try:
+                    google_event = service.events().insert(
+                        calendarId=GOOGLE_CALENDAR_ID,
+                        body=google_event_body(
+                            sesh.get('title', 'Study Session'),
+                            description,
+                            start_time.isoformat(),
+                            end_time.isoformat()
+                        )
+                    ).execute()
+                    google_event_id = google_event.get('id')
+                    cursor.execute(
+                        'UPDATE events SET googleEventID = ?, lastSynced = CURRENT_TIMESTAMP WHERE eventID = ?',
+                        (google_event_id, event_id)
+                    )
+                    print(f"[API_SCHEDULE_SAVE] Synced to Google: {google_event_id}")
+                except Exception as google_error:
+                    print(f"[GOOGLE] Could not push event {event_id}: {google_error} - continuing anyway")
+
+            # Link to task if applicable - use task_id from session data
+            task_id = sesh.get('task_id')
+            if link_to_tasks and task_id:
+                try:
+                    cursor.execute(
+                        'UPDATE tasks SET eventID = ? WHERE taskID = ? AND userID = ?',
+                        (event_id, task_id, user_id)
+                    )
+                    print(f"[API_SCHEDULE_SAVE] Linked to task {task_id}")
+                except Exception as e:
+                    print(f"[API_SCHEDULE_SAVE] Could not link to task: {e}")
+
+            created_events.append({
+                'eventID': event_id,
+                'googleEventID': google_event_id,
+                'title': sesh.get('title'),
+                'start': sesh['start'],
+                'end': sesh['end']
+            })
+
+        if not created_events:
+            conn.rollback()
+            return jsonify({'status': 'error', 'message': 'No valid study sessions were available to save.'}), 400
+
+        conn.commit()
+
+        print(f"[API_SCHEDULE_SAVE] Successfully saved {len(created_events)} events")
+        print(f"{'='*60}\n")
+
+        return jsonify({
+            'status': 'success',
+            'created': len(created_events),
+            'events': created_events
+        }), 200
+
+    except Exception as e:
+        if conn:
+            conn.rollback()
+        print(f'[SCHEDULE_SAVE] Error: {e}')
+        import traceback
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+    finally:
+        if conn:
+            conn.close()
+
+
+@app.route('/api/schedule/recommended', methods=['GET'])
+@login_required
+def get_recommended_times():
+    """
+    Get recommended study times based on user's existing schedule and preferences.
+    """
+    user_id = session.get('user_id')
+    
+
+    try:
+        conn = get_db_connection()
+        user_preferences = get_user_preferences(conn, user_id)
+
+        # Get existing events for the next 7 days
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT startTime, endTime, title
+            FROM events
+            WHERE userID = ?
+              AND isDeleted = 0
+              AND startTime >= datetime('now')
+              AND startTime <= datetime('now', '+7 days')
+            ORDER BY startTime
+        """, (user_id,))
+
+        events = []
+        for row in cursor.fetchall():
+            try:
+                events.append({
+                    'start': parse_calendar_dt(row['startTime']),
+                    'end': parse_calendar_dt(row['endTime']),
+                    'title': row['title']
+                })
+            except Exception:
+                continue
+
+        # Get pending tasks
+        cursor.execute("""
+            SELECT title, dueDate, taskType
+            FROM tasks
+            WHERE userID = ?
+              AND COALESCE(status, 'pending') != 'completed'
+              AND dueDate IS NOT NULL
+            ORDER BY dueDate
+            LIMIT 10
+        """, (user_id,))
+
+        tasks = []
+        for row in cursor.fetchall():
+            try:
+                due_date = datetime.strptime(row['dueDate'], '%Y-%m-%d').date() if row['dueDate'] else None
+            except Exception:
+                due_date = None
+
+            tasks.append({
+                'title': row['title'],
+                'due_date': due_date,
+                'type': row['taskType']
+            })
+
+        conn.close()
+
+        # Find available slots
+        generator = scheduler.ScheduleGenerator(user_id, user_preferences)
+        generator.events = events
+        slots = generator.find_available_slots(
+            duration_minutes=60,
+            user_id=user_id,
+            end_date=datetime.now() + timedelta(days=7)
+        )
+
+        # Format slots for response
+        available_slots = []
+        for slot in slots[:20]:  # Limit to 20 slots
+            available_slots.append({
+                'start': slot['start'].isoformat(),
+                'end': slot['end'].isoformat(),
+                'duration_minutes': int((slot['end'] - slot['start']).total_seconds() / 60)
+            })
+
+        return jsonify({
+            'status': 'success',
+            'available_slots': available_slots,
+            'upcoming_tasks': tasks,
+            'preferences': user_preferences
+        }), 200
+
+    except Exception as e:
+        print(f'[RECOMMENDED_TIMES] Error: {e}')
+        import traceback
+        traceback.print_exc()
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/api/schedule/parse-input', methods=['POST'])
+@login_required
+def parse_schedule_input():
+    """
+    Parse freeform text input and return structured data for preview.
+    """
+    data = request.get_json() or {}
+    text = data.get('text', '')
+
+    try:
+        parsed = scheduler.parse_freeform_text(text)
+        return jsonify({
+            'status': 'success',
+            'parsed': parsed
+        }), 200
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+def get_user_preferences(conn, user_id):
+    """Get user scheduling preferences."""
+    cursor = conn.cursor()
+    cursor.execute("SELECT userSettings FROM users WHERE userID = ?", (user_id,))
+    row = cursor.fetchone()
+
+    settings = _load_user_settings(row['userSettings'] if row else None)
+    return _scheduler_settings_from(settings)
+
+
 @app.route('/calendar/reschedule', methods=['POST'])
 @login_required
 def reschedule_event():
@@ -1706,7 +2518,13 @@ def reschedule_event():
         'UPDATE events SET startTime = ?, endTime = ?, updatedAt = CURRENT_TIMESTAMP WHERE eventID = ?',
         (new_start, new_end, event_id)
     )
-    service = get_google_service(user_id)
+    
+    service = None
+    try:
+        service = get_google_service(user_id)
+    except Exception as e:
+        print(f"[GOOGLE SERVICE ERROR] {e}")
+        
     if service and event['googleEventID']:
         try:
             service.events().update(
@@ -2795,9 +3613,19 @@ def build_source_payload(chunks: list) -> list:
         return []
 
 
+def make_chat_title(question: str) -> str:
+    """Create a compact, human-readable chat title from the first message."""
+    title = ' '.join((question or '').strip().split())
+    if not title:
+        return 'Untitled Chat'
+    title = title[:48].rstrip(' ,.;:')
+    return title or 'Untitled Chat'
+
+
 # ── /api/chat ─────────────────────────────────────────────────────
 
 @app.route('/api/chat', methods=['POST'])
+@login_required
 def api_chat():
     try:
         from Chat.gemini_client  import ask_gemini
@@ -2847,8 +3675,19 @@ def api_chat():
 
         # ── Save to database ──
         try:
-            user_id = session.get('userID', 1)
+            user_id = session.get('user_id')
             session_id = session.get('active_chat_session')
+
+            if session_id:
+                conn = get_db_connection()
+                existing_session = conn.execute(
+                    'SELECT sessionID FROM chat_sessions WHERE sessionID = ? AND userID = ?',
+                    (session_id, user_id)
+                ).fetchone()
+                conn.close()
+                if not existing_session:
+                    session_id = None
+                    session.pop('active_chat_session', None)
             
             # If no active session, create one
             if not session_id:
@@ -2857,10 +3696,11 @@ def api_chat():
                 cursor.execute('''
                     INSERT INTO chat_sessions (userID, title, subject, module, createdAt, updatedAt)
                     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-                ''', (user_id, f"{subject} Chat", subject, module))
+                ''', (user_id, make_chat_title(question), subject, module))
                 conn.commit()
                 session_id = cursor.lastrowid
                 session['active_chat_session'] = session_id
+                conn.close()
             
             conn = get_db_connection()
             cursor = conn.cursor()
@@ -2875,13 +3715,24 @@ def api_chat():
                 VALUES (?, ?, 'assistant', ?, ?, ?, CURRENT_TIMESTAMP)
             ''', (session_id, user_id, mode, response, json.dumps(chunks)))
             # Update session metadata
+            current_session = cursor.execute(
+                'SELECT title, messageCount FROM chat_sessions WHERE sessionID = ? AND userID = ?',
+                (session_id, user_id)
+            ).fetchone()
+            session_title = current_session['title'] if current_session else make_chat_title(question)
+            if current_session and current_session['messageCount'] in (0, None):
+                session_title = make_chat_title(question)
             cursor.execute('''
                 UPDATE chat_sessions
-                SET messageCount = (SELECT COUNT(*) FROM chat_messages WHERE sessionID = ?),
+                SET title = ?,
+                    subject = ?,
+                    module = ?,
+                    messageCount = (SELECT COUNT(*) FROM chat_messages WHERE sessionID = ?),
                     updatedAt = CURRENT_TIMESTAMP
                 WHERE sessionID = ?
-            ''', (session_id, session_id))
+            ''', (session_title, subject, module, session_id, session_id))
             conn.commit()
+            conn.close()
         except Exception as conn_exc:
             print(f"[CHAT_DB_SAVE] {conn_exc}")
             # Don't fail the chat if database save fails
@@ -2892,6 +3743,8 @@ def api_chat():
             "sources":        build_source_payload(chunks),
             "mode":           mode,
             "retrieval_error": retrieval_error,
+            "sessionID":      session.get('active_chat_session'),
+            "title":          locals().get('session_title'),
         })
 
     except RuntimeError as exc:
@@ -3054,10 +3907,11 @@ def clear_history():
 # ── /api/chat/sessions ────────────────────────────────────────────
 
 @app.route('/api/chat/sessions', methods=['GET'])
+@login_required
 def get_chat_sessions():
     """List all chat sessions for the current user."""
     try:
-        user_id = session.get('userID', 1)
+        user_id = session.get('user_id')
         conn = get_db_connection()
         cursor = conn.cursor()
         cursor.execute('''
@@ -3074,10 +3928,11 @@ def get_chat_sessions():
 
 
 @app.route('/api/chat/session', methods=['POST'])
+@login_required
 def create_chat_session():
     """Create a new chat session."""
     try:
-        user_id = session.get('userID', 1)
+        user_id = session.get('user_id')
         data = request.get_json() or {}
         title = data.get('title', 'Untitled Chat').strip()
         subject = data.get('subject', 'General').strip()
@@ -3102,10 +3957,11 @@ def create_chat_session():
 
 
 @app.route('/api/chat/session/<int:session_id>', methods=['GET'])
+@login_required
 def load_chat_session(session_id):
     """Load a specific chat session and its messages."""
     try:
-        user_id = session.get('userID', 1)
+        user_id = session.get('user_id')
         conn = get_db_connection()
         cursor = conn.cursor()
 
@@ -3152,11 +4008,42 @@ def load_chat_session(session_id):
         return jsonify({"error": "Could not load chat session."}), 500
 
 
+@app.route('/api/chat/session/<int:session_id>', methods=['PATCH'])
+@login_required
+def rename_chat_session(session_id):
+    """Rename a chat session owned by the current user."""
+    try:
+        user_id = session.get('user_id')
+        data = request.get_json() or {}
+        title = (data.get('title') or '').strip()
+        if not title:
+            return jsonify({"error": "Chat title is required."}), 400
+        title = title[:80]
+
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute('''
+            UPDATE chat_sessions
+            SET title = ?, updatedAt = CURRENT_TIMESTAMP
+            WHERE sessionID = ? AND userID = ?
+        ''', (title, session_id, user_id))
+        if cursor.rowcount == 0:
+            conn.close()
+            return jsonify({"error": "Chat session not found."}), 404
+        conn.commit()
+        conn.close()
+        return jsonify({"success": True, "sessionID": session_id, "title": title})
+    except Exception as exc:
+        print(f"[RENAME_CHAT] {exc}")
+        return jsonify({"error": "Could not rename chat."}), 500
+
+
 @app.route('/api/chat/session/<int:session_id>', methods=['DELETE'])
+@login_required
 def delete_chat_session(session_id):
     """Delete a chat session and all its messages."""
     try:
-        user_id = session.get('userID', 1)
+        user_id = session.get('user_id')
         conn = get_db_connection()
         cursor = conn.cursor()
 

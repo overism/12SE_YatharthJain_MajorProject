@@ -150,3 +150,13 @@ data/
 WebServer/Dusty_PWA/dusty.db
 
 *.db
+
+odysseus/
+
+graphify-out/
+
+.sixth/
+
+.claude/
+
+CLAUDE.md

@@ -12,6 +12,7 @@ const Chat = {
     thinkId:        null,
     sessionID:      null,
     sessions:       [],
+    user:           { username: '', pfp: '' },
 };
 
 const EL = {};
@@ -32,6 +33,13 @@ const PLACEHOLDERS = {
 
 // ── INIT ─────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+    const userDataEl = document.getElementById('chatUserData');
+    try {
+        Chat.user = JSON.parse(userDataEl?.textContent || '{}') || {};
+    } catch {
+        Chat.user = {};
+    }
+
     EL.form         = document.getElementById('chatForm');
     EL.input        = document.getElementById('questionInput');
     EL.messages     = document.getElementById('messages');
@@ -111,6 +119,8 @@ async function handleSubmit(e) {
         removeThinking();
         addMsg('assistant', data.response || 'No response returned.');
         renderSources(data.sources || [], data.retrieval_error);
+        if (data.sessionID) Chat.sessionID = data.sessionID;
+        await loadChatSessions();
     } catch (err) {
         removeThinking();
         addMsg('assistant', '⚠️ ' + err.message);
@@ -247,7 +257,11 @@ function addMsg(role, text) {
 
     const av = document.createElement('div');
     av.className = 'msg-av';
-    av.textContent = role === 'user' ? 'Y' : 'D';
+    if (role === 'user') {
+        av.innerHTML = userAvatarHTML();
+    } else {
+        av.innerHTML = '<img src="/static/images/icon-192.png" width="25" height="25" alt="Assistant">';
+    }
 
     const bub = document.createElement('div');
     bub.className = 'msg-bubble';
@@ -258,13 +272,22 @@ function addMsg(role, text) {
     EL.messages.scrollTop = EL.messages.scrollHeight;
 }
 
+function userAvatarHTML() {
+    if (Chat.user?.pfp) {
+        return `<img src="${escH(Chat.user.pfp)}" width="34" height="34" alt="You">`;
+    }
+    const initial = (Chat.user?.username || 'You').trim().charAt(0).toUpperCase() || 'Y';
+    return escH(initial);
+}
+
 function showThinking() {
     Chat.thinkId = 'think-' + Date.now();
     const art = document.createElement('article');
     art.className = 'message thinking'; art.id = Chat.thinkId;
 
     const av = document.createElement('div');
-    av.className = 'msg-av'; av.textContent = 'D';
+    av.className = 'msg-av';
+    av.innerHTML = '<img src="/static/images/icon-192.png" width="25" height="25" alt="Assistant">';
 
     const bub = document.createElement('div');
     bub.className = 'msg-bubble';
@@ -441,8 +464,11 @@ function renderChatHistory() {
 
     const html = Chat.sessions.map(sess => `
         <div class="chat-history-item ${sess.sessionID === Chat.sessionID ? 'active' : ''}" data-session-id="${sess.sessionID}">
-            <span class="chat-item-title">${escH(sess.title)}</span>
-            <span class="chat-history-item-close" onclick="deleteChatSession(${sess.sessionID}); event.stopPropagation();">×</span>
+            <span class="chat-item-title">${escH(sess.title || 'Untitled Chat')}</span>
+            <span class="chat-item-actions">
+                <button type="button" class="chat-item-action" title="Rename chat" onclick="renameChatSession(${sess.sessionID}); event.stopPropagation();">✎</button>
+                <button type="button" class="chat-item-action" title="Delete chat" onclick="deleteChatSession(${sess.sessionID}); event.stopPropagation();">×</button>
+            </span>
         </div>
     `).join('');
     
@@ -455,13 +481,10 @@ function renderChatHistory() {
 
 async function createNewChat() {
     try {
-        const subject = (EL.subject?.value || 'General').trim();
-        const module = (EL.module?.value || 'General').trim();
-        
         const data = await postJSON('/api/chat/session', {
-            title: `${subject} - ${new Date().toLocaleDateString()}`,
-            subject: subject,
-            module: module,
+            title: 'Untitled Chat',
+            subject: (EL.subject?.value || 'General').trim(),
+            module: (EL.module?.value || 'General').trim(),
         });
         
         Chat.sessionID = data.sessionID;
@@ -523,5 +546,31 @@ async function deleteChatSession(sessionID) {
         showToast('Chat deleted', 'info');
     } catch (err) {
         showToast('Could not delete chat', 'error');
+    }
+}
+
+async function renameChatSession(sessionID) {
+    const current = Chat.sessions.find(s => s.sessionID === sessionID);
+    const nextTitle = prompt('Rename chat', current?.title || 'Untitled Chat');
+    if (nextTitle === null) return;
+    const title = nextTitle.trim();
+    if (!title) {
+        showToast('Chat title cannot be empty', 'error');
+        return;
+    }
+
+    try {
+        const res = await fetch(`/api/chat/session/${sessionID}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title })
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || 'Could not rename chat');
+        Chat.sessions = Chat.sessions.map(s => s.sessionID === sessionID ? { ...s, title: data.title } : s);
+        renderChatHistory();
+        showToast('Chat renamed', 'info');
+    } catch (err) {
+        showToast(err.message, 'error');
     }
 }

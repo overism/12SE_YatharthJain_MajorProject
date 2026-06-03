@@ -78,6 +78,47 @@
                 <label style="display:block;font-weight:700;margin-bottom:6px">Your subjects</label>
                 <div id="prefsSubjectsProfile" style="display:flex;flex-wrap:wrap;gap:8px"></div>
             </div>
+            <div style="margin-top:16px">
+                <label style="display:block;font-weight:700;margin-bottom:10px">Scheduler settings</label>
+                <div class="profile-scheduler-grid">
+                    <div class="form-row">
+                        <label class="form-label" for="profileStudyStart">Study Start</label>
+                        <select id="profileStudyStart" class="form-input"></select>
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label" for="profileStudyEnd">Study End</label>
+                        <select id="profileStudyEnd" class="form-input"></select>
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label" for="profileSleepStart">Sleep Time</label>
+                        <select id="profileSleepStart" class="form-input"></select>
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label" for="profileSleepEnd">Wake Up</label>
+                        <select id="profileSleepEnd" class="form-input"></select>
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label" for="profileSchoolStart">School Start</label>
+                        <select id="profileSchoolStart" class="form-input"></select>
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label" for="profileSchoolEnd">School End</label>
+                        <select id="profileSchoolEnd" class="form-input"></select>
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label" for="profileMaxDaily">Max Daily Study</label>
+                        <select id="profileMaxDaily" class="form-input"></select>
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label" for="profileSessionDuration">Session Length</label>
+                        <select id="profileSessionDuration" class="form-input"></select>
+                    </div>
+                    <div class="form-row">
+                        <label class="form-label" for="profileBreakDuration">Break Length</label>
+                        <select id="profileBreakDuration" class="form-input"></select>
+                    </div>
+                </div>
+            </div>
             <div class="modal-actions">
                 <button type="button" class="btn btn-outline" onclick="closePrefsModal()">Cancel</button>
                 <button type="submit" class="btn btn-primary">Save</button>
@@ -481,10 +522,52 @@
         { key: 'pink', label: 'Pink' }
     ];
 
+    function hourOptionsProfile(start, end, selected) {
+        let html = '';
+        for (let h = start; h <= end; h += 1) {
+            const suffix = h >= 12 ? 'PM' : 'AM';
+            const display = h === 0 ? 12 : (h > 12 ? h - 12 : h);
+            html += `<option value="${h}" ${Number(selected) === h ? 'selected' : ''}>${display}:00 ${suffix}</option>`;
+        }
+        return html;
+    }
+
+    function numberOptionsProfile(values, selected, suffix) {
+        return values.map(v => `<option value="${v}" ${Number(selected) === v ? 'selected' : ''}>${v}${suffix}</option>`).join('');
+    }
+
+    function populateProfileSchedulerPrefs(scheduler = {}) {
+        document.getElementById('profileStudyStart').innerHTML = hourOptionsProfile(6, 10, scheduler.study_start ?? 8);
+        document.getElementById('profileStudyEnd').innerHTML = hourOptionsProfile(20, 23, scheduler.study_end ?? 22);
+        document.getElementById('profileSleepStart').innerHTML = hourOptionsProfile(21, 23, scheduler.sleep_start ?? 22) + `<option value="0" ${Number(scheduler.sleep_start ?? 22) === 0 ? 'selected' : ''}>12:00 AM</option>`;
+        document.getElementById('profileSleepEnd').innerHTML = hourOptionsProfile(5, 8, scheduler.sleep_end ?? 7);
+        document.getElementById('profileSchoolStart').innerHTML = hourOptionsProfile(7, 10, scheduler.school_start ?? 9);
+        document.getElementById('profileSchoolEnd').innerHTML = hourOptionsProfile(14, 17, scheduler.school_end ?? 15);
+        document.getElementById('profileMaxDaily').innerHTML = numberOptionsProfile([2,3,4,5,6], scheduler.max_daily_hours ?? 4, ' hours');
+        document.getElementById('profileSessionDuration').innerHTML = numberOptionsProfile([30,45,60,90,120], scheduler.session_duration ?? 60, ' minutes');
+        document.getElementById('profileBreakDuration').innerHTML = numberOptionsProfile([0,5,10,15,20], scheduler.break_duration ?? 10, ' minutes');
+    }
+
+    function collectProfileSchedulerPrefs(subjects) {
+        return {
+            study_start: Number(document.getElementById('profileStudyStart').value || 8),
+            study_end: Number(document.getElementById('profileStudyEnd').value || 22),
+            sleep_start: Number(document.getElementById('profileSleepStart').value || 22),
+            sleep_end: Number(document.getElementById('profileSleepEnd').value || 7),
+            school_start: Number(document.getElementById('profileSchoolStart').value || 9),
+            school_end: Number(document.getElementById('profileSchoolEnd').value || 15),
+            max_daily_hours: Number(document.getElementById('profileMaxDaily').value || 4),
+            session_duration: Number(document.getElementById('profileSessionDuration').value || 60),
+            break_duration: Number(document.getElementById('profileBreakDuration').value || 10),
+            priority_subjects: subjects.map(s => String(s.subjectID)),
+            scheduler_onboarded: true
+        };
+    }
+
     // Preferences modal: load subjects and pre-fill
     async function loadPrefsSubjectsForProfile() {
         try {
-            const res = await fetch('/api/subjects');
+            const res = await fetch('/api/user/preferences');
             const data = await res.json();
             const wrap = document.getElementById('prefsSubjectsProfile');
             wrap.innerHTML = '';
@@ -505,6 +588,8 @@
                     }
                 });
             }
+
+            populateProfileSchedulerPrefs(data.scheduler || {});
 
             (data.subjects || []).forEach(s => {
                 const id = s.subjectID;
@@ -541,16 +626,17 @@
             subjectID: Number(input.value),
             colourScheme: form.querySelector(`select[name="colour-${input.value}"]`)?.value || 'orange'
         }));
+        const scheduler = collectProfileSchedulerPrefs(subjects);
         try {
             const res = await fetch('/api/user/preferences', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ theme, subjects })
+                body: JSON.stringify({ theme, subjects, scheduler })
             });
             const data = await res.json().catch(() => ({}));
             if (res.ok && data.success) {
                 toast('Preferences saved.', 'success');
-                PROFILE_USER.userSettings = { theme };
+                PROFILE_USER.userSettings = { theme, ...scheduler };
                 closePrefsModal();
                 if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
                 else document.documentElement.removeAttribute('data-theme');
