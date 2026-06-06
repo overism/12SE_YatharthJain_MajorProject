@@ -77,6 +77,7 @@ if (signupForm) {
             method: "POST",
             body: new FormData(this)
         })
+
         .then(res => res.json())
         .then(data => {
             showPopup(data.title, data.message, () => {

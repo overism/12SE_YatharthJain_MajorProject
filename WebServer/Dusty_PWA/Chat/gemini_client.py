@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # ── CONFIGURATION ─────────────────────────────────────────────────
-DEFAULT_MODEL   = "gemini-2.5-flash"
+DEFAULT_MODEL   = "gemini-3.5-flash"
 MAX_RETRIES     = 3
 RETRY_DELAY_S   = 1.5     # doubled on each retry
 REQUEST_TIMEOUT = 60      # seconds
@@ -93,7 +93,7 @@ def _call_with_retry(fn, *args, **kwargs):
 def ask_gemini(
     prompt: str,
     temperature: float = 0.65,
-    max_output_tokens: int = 1800,
+    max_output_tokens: int = 4096,
 ) -> str:
     """
     Send a text prompt to Gemini and return the response string.
@@ -167,7 +167,7 @@ def ask_gemini(
 def ask_gemini_json(
     prompt: str,
     temperature: float = 0.40,
-    max_output_tokens: int = 2800,
+    max_output_tokens: int = 4096,
 ) -> dict | list:
     """
     Ask Gemini for a JSON response and parse it.

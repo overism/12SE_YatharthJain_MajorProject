@@ -36,7 +36,9 @@ Guidelines:
 - If retrieved sources are relevant, reference them by Source number.
 - If sources are not relevant, answer from general HSC knowledge and say so.
 - Keep responses structured but concise. Use short paragraphs or dot points.
-- Do NOT use raw markdown symbols like ** or ## — write in plain sentences.
+- Use markdown formatting for structure: **bold** for key terms, ## for section headings, - for bullet points, and numbered lists for steps.
+- Do NOT use raw HTML. Do NOT use --- horizontal rules in the middle of responses.
+- Keep formatting purposeful — only bold genuinely important terms, not every sentence.
 
 {_resource_block(retrieved_chunks_text)}{history}
 SUBJECT: {subject}
@@ -65,7 +67,7 @@ Provide exactly these six sections:
 5. Band 6 Gap — what would concretely lift this to Band 6.
 6. Next Study Action — one specific thing the student should do this week.
 
-Write in plain English. No raw markdown symbols."""
+Write in plain English only. Do not use any markdown: no **, no *, no ##, no ---, no asterisk bullets. Use numbered lists and plain prose only."""
 
 
 # ── QUESTION GENERATION ───────────────────────────────────────────
@@ -89,7 +91,7 @@ Include:
 4. Common Mistakes — two or three traps students fall into.
 5. Approach Strategy — how to plan and write the answer in an exam.
 
-Write in plain English. No raw markdown symbols."""
+Write in plain English only. Do not use any markdown: no **, no *, no ##, no ---, no asterisk bullets. Use numbered lists and plain prose only."""
 
 
 # ── QUIZ GENERATION ───────────────────────────────────────────────
@@ -136,7 +138,9 @@ Return ONLY valid JSON — no markdown fences, no commentary:
 Rules:
 - Mix multiple_choice and short_answer. Use HSC command verbs.
 - Options must be plausible. Only one correct option per MC question.
-- Provide exactly {question_count} questions."""
+- Provide exactly {question_count} questions.
+
+YOUR RESPONSE MUST START WITH {{ AND END WITH }}. NO OTHER TEXT WHATSOEVER."""
 
 
 # ── FLASHCARDS ────────────────────────────────────────────────────

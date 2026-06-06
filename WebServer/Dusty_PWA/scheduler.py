@@ -13,7 +13,7 @@ Designed for Year 11/12 HSC students.
 
 import re
 import json
-from datetime import datetime, timedelta, date, timezone
+from datetime import datetime, timedelta, date
 from typing import Optional, List, Dict, Any
 from collections import defaultdict
 
@@ -123,7 +123,7 @@ def calculate_free_time_windows(
     print(f"[SCHEDULER] Calculating free windows from {start_date} to {end_date}")
 
     # Get user preferences
-    study_start = user_preferences.get('study_start', 8)
+    study_start = user_preferences.get('study_start', 6)
     study_end = user_preferences.get('study_end', 22)
     sleep_start = user_preferences.get('sleep_start', 22)
     sleep_end = user_preferences.get('sleep_end', 7)
@@ -152,6 +152,11 @@ def calculate_free_time_windows(
                 start = parse_calendar_dt(row['startTime'])
                 end = parse_calendar_dt(row['endTime'])
                 if start and end:
+                    # Strip timezone to keep consistent with naive local datetimes
+                    if start.tzinfo is not None:
+                        start = start.replace(tzinfo=None)
+                    if end.tzinfo is not None:
+                        end = end.replace(tzinfo=None)
                     existing_events.append({
                         'id': row['eventID'],
                         'title': row['title'],
@@ -169,18 +174,21 @@ def calculate_free_time_windows(
 
     # Build timeline and find free slots
     free_slots = []
-    # Make timezone-aware to match event['start'] from database (which uses UTC)
-    if start_date.tzinfo is None:
-        start_date = start_date.replace(tzinfo=timezone.utc)
-    if end_date.tzinfo is None:
-        end_date = end_date.replace(tzinfo=timezone.utc)
+    # Strip any timezone info to keep everything naive/local
+    if start_date.tzinfo is not None:
+        start_date = start_date.replace(tzinfo=None)
+    if end_date.tzinfo is not None:
+        end_date = end_date.replace(tzinfo=None)
+
     current = start_date.replace(hour=study_start, minute=0, second=0, microsecond=0)
 
-    # If current time is later than study start, adjust
     if current < start_date:
-        current = start_date
-        if current.tzinfo is None:
-            current = current.replace(tzinfo=timezone.utc)
+        # Round up to the next clean 30-minute interval instead of using exact current time
+        now_minutes = start_date.minute
+        if now_minutes < 30:
+            current = start_date.replace(minute=30, second=0, microsecond=0)
+        else:
+            current = (start_date + timedelta(hours=1)).replace(minute=0, second=0, microsecond=0)
 
     while current < end_date:
         # Skip sleep hours
@@ -196,10 +204,10 @@ def calculate_free_time_windows(
                     current = (current + timedelta(days=1)).replace(hour=study_start)
                 continue
 
-        # Skip school hours on weekdays
-        if current.weekday() < 5:  # Monday-Friday
-            if school_start <= current.hour < school_end:
-                current = current.replace(hour=school_end, minute=0, second=0, microsecond=0)
+        # Skip school hours on weekdays (block entire school day including pre-school)
+        if current.weekday() < 5:
+            if current.hour < school_end:
+                current = current.replace(hour=school_end + 1, minute=0, second=0, microsecond=0)
                 continue
 
         # Check if within study hours
@@ -758,6 +766,7 @@ def generate_smart_schedule_with_gemini(
 
         print(f"[GEMINI_SCHEDULE] Received response from Gemini")
         print(f"[GEMINI_SCHEDULE] Response type: {type(result)}")
+        print(f"[GEMINI_SCHEDULE] Raw result preview: {str(result)[:1000]}")
 
         if isinstance(result, (dict, list)):
             sessions_data, reasoning, techniques = normalize_gemini_schedule_result(result)
@@ -820,15 +829,18 @@ def allocate_sessions_to_slots(
     subject_colour_map = user_data.get("subject_colour_map", {})
 
     # Remaining availability inside each slot
-    working_slots = [
-        {
-            "start": slot["start"],
-            "end": slot["end"],
-            "duration_minutes": slot["duration_minutes"],
-            "quality": slot.get("quality", "good")
-        }
-        for slot in free_slots
-    ]
+    working_slots = sorted(
+        [
+            {
+                "start": slot["start"],
+                "end": slot["end"],
+                "duration_minutes": slot["duration_minutes"],
+                "quality": slot.get("quality", 50)
+            }
+            for slot in free_slots
+        ],
+        key=lambda s: s["start"]  # chronological, not quality-first
+    )
 
     allocated_sessions = []
 
@@ -838,6 +850,12 @@ def allocate_sessions_to_slots(
         if deadline:
             return deadline
         return datetime.max
+
+    # Filter out any malformed items Gemini may have returned (strings, nulls, etc.)
+    sessions_data = [s for s in sessions_data if isinstance(s, dict)]
+    if not sessions_data:
+        print("[ALLOCATOR] No valid session dicts after filtering — Gemini returned malformed data")
+        return []
 
     sessions_data = sorted(sessions_data, key=session_priority)
 
@@ -1041,18 +1059,31 @@ def normalize_date_text(value) -> Optional[str]:
 def normalize_gemini_schedule_result(result) -> tuple:
     """Accept common Gemini JSON shapes instead of only {'study_sessions': [...]}."""
     if isinstance(result, list):
-        return result, '', []
-    for key in ('study_sessions', 'sessions', 'schedule', 'events', 'study_plan'):
-        value = result.get(key)
-        if isinstance(value, list):
-            return value, result.get('reasoning', ''), result.get('techniques_used', [])
-    nested = result.get('schedule')
-    if isinstance(nested, dict):
-        for key in ('study_sessions', 'sessions', 'events'):
-            value = nested.get(key)
+        valid = [item for item in result if isinstance(item, dict)]
+        return valid, '', []
+    
+    if isinstance(result, dict):
+        # Check for known wrapper keys first
+        for key in ('study_sessions', 'sessions', 'schedule', 'events', 'study_plan'):
+            value = result.get(key)
             if isinstance(value, list):
-                return value, result.get('reasoning') or nested.get('reasoning', ''), result.get('techniques_used') or nested.get('techniques_used', [])
-    return [], result.get('reasoning', ''), result.get('techniques_used', [])
+                valid = [item for item in value if isinstance(item, dict)]
+                return valid, result.get('reasoning', ''), result.get('techniques_used', [])
+        
+        nested = result.get('schedule')
+        if isinstance(nested, dict):
+            for key in ('study_sessions', 'sessions', 'events'):
+                value = nested.get(key)
+                if isinstance(value, list):
+                    valid = [item for item in value if isinstance(item, dict)]
+                    return valid, result.get('reasoning') or nested.get('reasoning', ''), result.get('techniques_used') or nested.get('techniques_used', [])
+        
+        # Gemini returned a single session dict — wrap it in a list
+        if 'subject' in result and 'suggested_date' in result:
+            print("[NORMALISER] Gemini returned a single session dict — wrapping in list")
+            return [result], '', []
+
+    return [], '', []
 
 
 def parse_deadline_date(value) -> Optional[date]:

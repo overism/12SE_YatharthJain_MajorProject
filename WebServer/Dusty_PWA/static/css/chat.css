@@ -554,6 +554,74 @@
 }
 .composer-hint { font-size:12px; color:#aaa; font-weight:500; }
 
+/* RESPONSES */
+/* ── MARKDOWN RENDERING INSIDE BUBBLES ── */
+.msg-bubble h1 {
+    font-size: 17px; font-weight: 800; color: #22140b;
+    margin: 14px 0 6px; font-family: 'Cooper BT', Arial, serif;
+}
+.msg-bubble h2 {
+    font-size: 15px; font-weight: 700; color: #8a4a0a;
+    margin: 12px 0 5px;
+}
+.msg-bubble h3 {
+    font-size: 14px; font-weight: 700; color: #8a4a0a;
+    margin: 10px 0 4px;
+}
+.message.user .msg-bubble h1,
+.message.user .msg-bubble h2,
+.message.user .msg-bubble h3 { color: rgba(255,255,255,0.9); }
+
+.msg-bubble strong { font-weight: 700; color: inherit; }
+.msg-bubble em     { font-style: italic; }
+
+.msg-bubble ul, .msg-bubble ol {
+    margin: 6px 0 6px 20px; line-height: 1.7;
+}
+.msg-bubble li { margin-bottom: 3px; }
+
+.msg-bubble hr {
+    border: none; border-top: 1px solid rgba(0,0,0,0.1);
+    margin: 10px 0;
+}
+.message.user .msg-bubble hr { border-color: rgba(255,255,255,0.25); }
+
+.msg-bubble blockquote {
+    border-left: 3px solid #f5761c;
+    margin: 8px 0; padding: 6px 12px;
+    background: rgba(245,118,28,0.06);
+    border-radius: 0 8px 8px 0;
+    color: #555; font-style: italic;
+}
+
+.msg-bubble code {
+    font-family: 'Courier New', monospace; font-size: 12.5px;
+    background: rgba(0,0,0,0.07); padding: 2px 6px;
+    border-radius: 4px;
+}
+.message.user .msg-bubble code { background: rgba(255,255,255,0.2); }
+
+/* ── COLOURED TEXT ── */
+.msg-bubble .chat-colour-red    { color: #dc2626; font-weight: 600; }
+.msg-bubble .chat-colour-green  { color: #15803d; font-weight: 600; }
+.msg-bubble .chat-colour-blue   { color: #2563eb; font-weight: 600; }
+.msg-bubble .chat-colour-orange { color: #f5761c; font-weight: 600; }
+.msg-bubble .chat-colour-purple { color: #7c3aed; font-weight: 600; }
+.msg-bubble .chat-colour-yellow { color: #d97706; font-weight: 600; }
+.msg-bubble .chat-colour-teal   { color: #0891b2; font-weight: 600; }
+.msg-bubble .chat-colour-pink   { color: #be185d; font-weight: 600; }
+
+/* User bubble colour overrides — keep text readable on orange background */
+.message.user .msg-bubble .chat-colour-red,
+.message.user .msg-bubble .chat-colour-green,
+.message.user .msg-bubble .chat-colour-blue,
+.message.user .msg-bubble .chat-colour-orange,
+.message.user .msg-bubble .chat-colour-purple,
+.message.user .msg-bubble .chat-colour-yellow,
+.message.user .msg-bubble .chat-colour-teal,
+.message.user .msg-bubble .chat-colour-pink { color: rgba(255,255,255,0.9); }
+
+
 /* ── TOAST (matches tasks/calendar .status) ── */
 .status-toast {
     position:fixed; top:20px; right:20px;
@@ -578,7 +646,6 @@
 /* ── RESPONSIVE ── */
 @media (max-width:1100px) {
     .chat-workspace { grid-template-columns: 210px minmax(0,1fr); }
-    .sources-panel  { display:none; }
     .ctrl-panel { display:none; }
 }
 @media (max-width:768px) {

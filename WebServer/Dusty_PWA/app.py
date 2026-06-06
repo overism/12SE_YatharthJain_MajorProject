@@ -37,7 +37,7 @@ app = Flask(
     template_folder = basedir,
     static_folder = os.path.join(basedir, 'static')
 )
-app.secret_key = os.urandom(24)
+app.config["SECRET_KEY"] = "DM5Ucb]yh>d]FyK!8W|$v+cXwC-bB}jw"
 CORS(app)
 
 def login_required(f):
@@ -337,6 +337,36 @@ def debug_db():
             print("[DB DEBUG] error inspecting DB:", e)
             traceback.print_exc()
 
+def session_elapsed_time():
+    session_start = session.get("session_start")
+
+    if not session_start:
+        return 999999
+
+    try:
+        start_time = datetime.fromisoformat(session_start)
+    except (TypeError, ValueError):
+        return 999999
+
+    elapsed = datetime.now() - start_time
+
+    return elapsed.total_seconds() / 60
+
+@app.before_request
+def check_session_timeout():
+
+    if not session.get("logged_in"):
+        return
+
+    limit = 30 if session.get("user_id") == 1 else 15
+
+    if session_elapsed_time() > limit:
+        session.clear()
+        return jsonify({
+            "success": False,
+            "message": "Session expired."
+        }), 401
+
 # User Authentication (Login/Signup)
 @app.route('/login_validation', methods=['POST'])
 def login_validation():
@@ -355,6 +385,7 @@ def login_validation():
         session['user_name'] = user[1]
         session['user_email'] = email
         session['logged_in'] = True
+        session['session_start'] = datetime.now().isoformat()  # Admin-specific session variable for tracking time elapsed in the dashboard
         return jsonify({
             "success": True,
             "message": "Login successful!"
@@ -364,7 +395,7 @@ def login_validation():
         session['user_name'] = user[1]
         session['user_email'] = email
         session['logged_in'] = True
-
+        session['session_start'] = datetime.now().isoformat()  # Initialize session start time for regular users as well
         return jsonify({
             "success": True,
             "message": "Login successful!"
@@ -381,7 +412,7 @@ def add_user():
     username = request.form.get('username')
     password = request.form.get('password')
     
-    connection = sqlite3.connect(os.path.join(basedir, 'dusty.db'))
+    connection = get_db_connection()
     cursor = connection.cursor()
 
     existing = cursor.execute("SELECT 1 FROM users WHERE userEmail=?", (email,)).fetchone()
@@ -402,6 +433,7 @@ def add_user():
     # auto-login the newly created user so we can show the post-signup modal
     user_id = cursor.lastrowid
     connection.close()
+
     session['user_id'] = user_id
     session['user_name'] = username
     session['user_email'] = email
@@ -428,15 +460,25 @@ def api_get_subjects():
         print('[API /api/subjects] Error:', e)
         return jsonify({'error': 'Could not load subjects'}), 500
 
+@app.route('/debug_session')
+def debug_session():
+    print("DEBUG SESSION:", dict(session))
+    return jsonify(dict(session))
+
 @app.route('/api/user/preferences', methods=['GET', 'POST'])
-@login_required
 def api_user_preferences():
     """Load or save user preferences in users.userSettings JSON column."""
+
+    print("========== PREFERENCES ==========")
+    print("SESSION:", dict(session))
+
     user_id = session.get('user_id')
+    print("USER_ID:", user_id)
 
     if request.method == 'GET':
         try:
             conn = get_db_connection()
+            print("CALLING ensure_user_subjects WITH:", user_id)
             ensure_user_subjects(conn, user_id)
             user = conn.execute('SELECT userSettings FROM users WHERE userID = ?', (user_id,)).fetchone()
             settings = _load_user_settings(user['userSettings'] if user else None)
@@ -829,11 +871,12 @@ def get_google_service(user_id):
     conn.close()
 
     if not creds_row:
+        print(f"[GOOGLE SERVICE] No credentials found for user {user_id}")
         return None
 
     client_id, client_secret = get_google_client_config()
     if not client_id or not client_secret:
-        print('[GOOGLE] Missing client ID/secret. Check static/secrets/client_secret_2_718545971467-nk6uf6oai3gtf7lit9cac1gnkpur55a7.apps.googleusercontent.com.json')
+        print(f"[GOOGLE SERVICE] Missing client ID/secret")
         return None
 
     expiry_str = creds_row['expiry']
@@ -842,11 +885,11 @@ def get_google_service(user_id):
         try:
             expiry_dt = datetime.fromisoformat(expiry_str)
         except ValueError:
-            # If not ISO, try parsing as str(datetime)
             try:
                 expiry_dt = datetime.strptime(expiry_str, '%Y-%m-%d %H:%M:%S.%f')
             except ValueError:
                 expiry_dt = None
+
     credentials = Credentials(
         token=creds_row['accessToken'],
         refresh_token=creds_row['refreshToken'],
@@ -857,12 +900,16 @@ def get_google_service(user_id):
         expiry=expiry_dt
     )
 
+    print(f"[GOOGLE SERVICE] Credentials expired: {credentials.expired}")
+    print(f"[GOOGLE SERVICE] Has refresh token: {bool(credentials.refresh_token)}")
+
     if credentials.expired and credentials.refresh_token:
         from google.auth.transport.requests import Request
         from google.auth.exceptions import RefreshError
 
         try:
             credentials.refresh(Request())
+            print(f"[GOOGLE SERVICE] Token refreshed successfully")
 
             conn = get_db_connection()
             conn.execute("""
@@ -878,8 +925,7 @@ def get_google_service(user_id):
             conn.close()
 
         except RefreshError as e:
-            print(f"[GOOGLE REFRESH ERROR] {e}")
-
+            print(f"[GOOGLE SERVICE] Token refresh failed: {e}")
             conn = get_db_connection()
             conn.execute(
                 "DELETE FROM google_creds WHERE userID=?",
@@ -887,10 +933,11 @@ def get_google_service(user_id):
             )
             conn.commit()
             conn.close()
-
             return None
 
-    return build('calendar', 'v3', credentials=credentials)
+    service = build('calendar', 'v3', credentials=credentials)
+    print(f"[GOOGLE SERVICE] Service built successfully for user {user_id}")
+    return service
 
 
 @app.route('/auth/google')
@@ -1430,13 +1477,17 @@ def parse_calendar_dt(value):
 
 
 def google_event_body(title, description, start_time, end_time):
+    start_dt = parse_calendar_dt(start_time)
+    end_dt = parse_calendar_dt(end_time)
+    print(f"[GOOGLE DEBUG] Parsed start: {start_dt}, end: {end_dt}")
+    if not start_dt or not end_dt:
+        raise ValueError(f"Could not parse event times: start={start_time}, end={end_time}")
     return {
         'summary': title,
         'description': description or '',
-        'start': {'dateTime': parse_calendar_dt(start_time).isoformat(), 'timeZone': 'Australia/Sydney'},
-        'end': {'dateTime': parse_calendar_dt(end_time).isoformat(), 'timeZone': 'Australia/Sydney'}
+        'start': {'dateTime': start_dt.isoformat(), 'timeZone': 'Australia/Sydney'},
+        'end': {'dateTime': end_dt.isoformat(), 'timeZone': 'Australia/Sydney'}
     }
-
 
 def check_overlap(start_time, end_time, user_id, exclude_event_id=None):
     """Check if a time slot overlaps with existing events."""
@@ -1754,20 +1805,24 @@ def create_event():
 
         if service:
             try:
+                event_body = google_event_body(data['title'], data.get('description', ''), data['startTime'], data['endTime'])
+                print(f"[GOOGLE DEBUG] Attempting to push event body: {event_body}")
                 created = service.events().insert(
                     calendarId=GOOGLE_CALENDAR_ID,
-                    body=google_event_body(data['title'], data.get('description', ''), data['startTime'], data['endTime'])
+                    body=event_body
                 ).execute()
-
+                print(f"[GOOGLE DEBUG] Push successful, Google event ID: {created.get('id')}")
                 google_event_id = created.get('id')
 
-                # 3. UPDATE LOCAL EVENT WITH GOOGLE ID
                 cursor.execute("""
                     UPDATE events SET googleEventID=?, lastSynced=CURRENT_TIMESTAMP WHERE eventID=?
                 """, (google_event_id, event_id))
                 conn.commit()
             except Exception as google_error:
-                print(f"[GOOGLE] Could not push created event: {google_error}")
+                print(f"[GOOGLE] Could not push created event: {type(google_error).__name__}: {google_error}")
+                traceback.print_exc()
+        else:
+            print(f"[GOOGLE DEBUG] Service is None — skipping push for event {event_id}")
 
         conn.close()
         return jsonify({
@@ -2299,14 +2354,16 @@ def save_generated_schedule():
             # Sync to Google Calendar if connected - DON'T let failure break saving
             if service:
                 try:
+                    event_body = google_event_body(
+                        sesh.get('title', 'Study Session'),
+                        description,
+                        start_time,  # pass datetime object directly
+                        end_time     # pass datetime object directly
+                    )
+                    print(f"[GOOGLE DEBUG] Schedule save pushing event body: {event_body}")
                     google_event = service.events().insert(
                         calendarId=GOOGLE_CALENDAR_ID,
-                        body=google_event_body(
-                            sesh.get('title', 'Study Session'),
-                            description,
-                            start_time.isoformat(),
-                            end_time.isoformat()
-                        )
+                        body=event_body
                     ).execute()
                     google_event_id = google_event.get('id')
                     cursor.execute(
@@ -2315,7 +2372,10 @@ def save_generated_schedule():
                     )
                     print(f"[API_SCHEDULE_SAVE] Synced to Google: {google_event_id}")
                 except Exception as google_error:
-                    print(f"[GOOGLE] Could not push event {event_id}: {google_error} - continuing anyway")
+                    print(f"[GOOGLE] Could not push event {event_id}: {type(google_error).__name__}: {google_error}")
+                    traceback.print_exc()
+            else:
+                print(f"[GOOGLE DEBUG] Service is None for schedule save — skipping Google sync")
 
             # Link to task if applicable - use task_id from session data
             task_id = sesh.get('task_id')
@@ -2544,7 +2604,6 @@ def reschedule_event():
 @app.route('/calendar/check-google-auth', methods=['GET'])
 @login_required
 def check_google_auth():
-    """Check if user has connected Google Calendar."""
     user_id = session.get('user_id')
     
     try:
@@ -2556,9 +2615,9 @@ def check_google_auth():
         conn.close()
         
         if creds_row and creds_row[0]:
-            return jsonify({'connected': True}), 500
+            return jsonify({'connected': True}), 200
         else:
-            return jsonify({'connected': False}), 500
+            return jsonify({'connected': False}), 200
     except Exception as e:
         print(f"Error checking Google auth: {e}")
         return jsonify({'connected': False, 'error': str(e)}), 500
@@ -3536,10 +3595,10 @@ def legacy_ai_chat_disabled():
         prompt = build_tutor_prompt(question, subject, context, history_text)
     
     # Call Gemini
-    response = ask_gemini(prompt)
+    gemini_response = ask_gemini(prompt)
     
     # Store in session history
-    history.append({"q": question, "a": response})
+    history.append({"q": question, "a": gemini_response})
     session['chat_history'] = history[-10:]  # Keep last 10
     
     # Return sources too
@@ -3549,7 +3608,7 @@ def legacy_ai_chat_disabled():
     ]))
     
     return jsonify({
-        "response": response,
+        "response": gemini_response,
         "sources": sources[:3],
         "mode": mode
     })
@@ -3650,12 +3709,25 @@ def api_chat():
             question, subject, n_results=5
         )
 
-        # ── Chat history (last 4 turns) ──
-        history      = session.get('chat_history', [])
-        history_text = "\n".join(
-            f"Student: {h['q']}\nTutor: {h['a']}"
-            for h in history[-4:]
-        )
+        # ── Chat history from DB ──
+        history_text = ""
+        try:
+            conn_hist = get_db_connection()
+            recent_messages = conn_hist.execute('''
+                SELECT role, content FROM chat_messages
+                WHERE sessionID = ?
+                ORDER BY createdAt DESC LIMIT 8
+            ''', (session.get('active_chat_session'),)).fetchall()
+            conn_hist.close()
+
+            recent_messages = list(reversed(recent_messages))
+            pairs = []
+            for i in range(0, len(recent_messages) - 1, 2):
+                if recent_messages[i]['role'] == 'user' and recent_messages[i+1]['role'] == 'assistant':
+                    pairs.append(f"Student: {recent_messages[i]['content']}\nTutor: {recent_messages[i+1]['content']}")
+            history_text = "\n".join(pairs)
+        except Exception:
+            history_text = ""
 
         # ── Build prompt ──
         if mode == 'feedback':
@@ -3667,15 +3739,12 @@ def api_chat():
             prompt = build_tutor_prompt(question, subject, context, history_text)
 
         # ── Call Gemini ──
-        response = ask_gemini(prompt)
-
-        # ── Persist history ──
-        history.append({"q": question, "a": response, "subject": subject, "mode": mode})
-        session['chat_history'] = history[-10:]
+        gemini_response = ask_gemini(prompt)
 
         # ── Save to database ──
+        session_title = 'Untitled Chat'
         try:
-            user_id = session.get('user_id')
+            user_id    = session.get('user_id')
             session_id = session.get('active_chat_session')
 
             if session_id:
@@ -3688,8 +3757,7 @@ def api_chat():
                 if not existing_session:
                     session_id = None
                     session.pop('active_chat_session', None)
-            
-            # If no active session, create one
+
             if not session_id:
                 conn = get_db_connection()
                 cursor = conn.cursor()
@@ -3701,19 +3769,22 @@ def api_chat():
                 session_id = cursor.lastrowid
                 session['active_chat_session'] = session_id
                 conn.close()
-            
+
             conn = get_db_connection()
             cursor = conn.cursor()
+
             # Save user message
             cursor.execute('''
                 INSERT INTO chat_messages (sessionID, userID, role, mode, content, createdAt)
                 VALUES (?, ?, 'user', ?, ?, CURRENT_TIMESTAMP)
             ''', (session_id, user_id, mode, question))
+
             # Save assistant response
             cursor.execute('''
                 INSERT INTO chat_messages (sessionID, userID, role, mode, content, sources, createdAt)
                 VALUES (?, ?, 'assistant', ?, ?, ?, CURRENT_TIMESTAMP)
-            ''', (session_id, user_id, mode, response, json.dumps(chunks)))
+            ''', (session_id, user_id, mode, gemini_response, json.dumps(chunks)))
+
             # Update session metadata
             current_session = cursor.execute(
                 'SELECT title, messageCount FROM chat_sessions WHERE sessionID = ? AND userID = ?',
@@ -3722,6 +3793,7 @@ def api_chat():
             session_title = current_session['title'] if current_session else make_chat_title(question)
             if current_session and current_session['messageCount'] in (0, None):
                 session_title = make_chat_title(question)
+
             cursor.execute('''
                 UPDATE chat_sessions
                 SET title = ?,
@@ -3733,22 +3805,20 @@ def api_chat():
             ''', (session_title, subject, module, session_id, session_id))
             conn.commit()
             conn.close()
+
         except Exception as conn_exc:
             print(f"[CHAT_DB_SAVE] {conn_exc}")
-            # Don't fail the chat if database save fails
-            pass
 
         return jsonify({
-            "response":       response,
-            "sources":        build_source_payload(chunks),
-            "mode":           mode,
+            "response":        gemini_response,
+            "sources":         build_source_payload(chunks),
+            "mode":            mode,
             "retrieval_error": retrieval_error,
-            "sessionID":      session.get('active_chat_session'),
-            "title":          locals().get('session_title'),
+            "sessionID":       session.get('active_chat_session'),
+            "title":           session_title,
         })
 
     except RuntimeError as exc:
-        # Clean user-facing errors (Gemini errors, etc.)
         print(f"[API_CHAT] RuntimeError: {exc}")
         return jsonify({"error": str(exc)}), 500
     except Exception as exc:
@@ -3777,10 +3847,19 @@ def api_quiz_generate():
         prompt = build_quiz_generation_prompt(
             subject, module, difficulty, question_count, context
         )
-        quiz = ask_gemini_json(prompt)
+
+        try:
+            import requests as _req
+            pass
+        except Exception:
+            pass
+
+        quiz = ask_gemini_json(prompt, temperature=0.2)  # lower temperature for more reliable JSON
 
         if not isinstance(quiz, dict) or not quiz.get('questions'):
-            return jsonify({"error": "Quiz generation returned unexpected data. Please try again."}), 500
+            # Retry once with explicit JSON reminder appended
+            prompt_retry = prompt + "\n\nCRITICAL: Your entire response must be only the JSON object. No text before or after it."
+            quiz = ask_gemini_json(prompt_retry, temperature=0.1)
 
         # Normalise questions
         questions = quiz.get('questions', [])

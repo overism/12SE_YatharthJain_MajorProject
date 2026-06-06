@@ -77,12 +77,12 @@
         .subject-preset-btn:hover {
             border-color: rgba(245,118,28,.4);
             background: rgba(245,118,28,.08);
-            color: #fff;
+            color: #f54f1c;
         }
         .subject-preset-btn.selected {
             border-color: var(--subj-col, #f5761c);
             background: rgba(var(--subj-col-rgb, 245,118,28), .15);
-            color: #fff;
+            color: #f5761c;
         }
         .subject-preset-btn .subj-check {
             width: 20px; height: 20px; border-radius: 50%;
@@ -110,7 +110,7 @@
             background: rgba(255,255,255,.04);
             border: 1px solid rgba(255,255,255,.08);
         }
-        .colour-row-name { flex: 1; font-size: 13.5px; font-weight: 600; color: #fff; }
+        .colour-row-name { flex: 1; font-size: 13.5px; font-weight: 600; color: #f54f1c; }
 
         .colour-swatches { display: flex; gap: 7px; flex-wrap: wrap; }
         .colour-swatch {
@@ -284,7 +284,6 @@
                 <p class="prefs-section-label">Your HSC Subjects</p>
                 <div class="subject-preset-grid" id="subjectPresetGrid"></div>
                 <div class="prefs-actions">
-                    <button class="btn-prefs-skip" type="button" onclick="skipPrefs()">Skip for now</button>
                     <button class="btn-prefs-save" type="button" id="nextStepBtn" onclick="goToStep2()" disabled>Choose Colours →</button>
                 </div>
             </div>

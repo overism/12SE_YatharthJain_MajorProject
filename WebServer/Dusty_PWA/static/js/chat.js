@@ -43,7 +43,6 @@ document.addEventListener('DOMContentLoaded', () => {
     EL.form         = document.getElementById('chatForm');
     EL.input        = document.getElementById('questionInput');
     EL.messages     = document.getElementById('messages');
-    EL.sources      = document.getElementById('sourcesList');
     EL.toast        = document.getElementById('statusToast');
     EL.subject      = document.getElementById('subjectSelect');
     EL.module       = document.getElementById('moduleInput');
@@ -118,7 +117,6 @@ async function handleSubmit(e) {
         });
         removeThinking();
         addMsg('assistant', data.response || 'No response returned.');
-        renderSources(data.sources || [], data.retrieval_error);
         if (data.sessionID) Chat.sessionID = data.sessionID;
         await loadChatSessions();
     } catch (err) {
@@ -149,7 +147,6 @@ async function generateQuiz() {
         removeThinking();
         Chat.quiz = data.quiz;
         renderQuiz(data.quiz);
-        renderSources(data.sources || [], data.retrieval_error);
         addMsg('assistant', `I've generated "${data.quiz?.title || 'your quiz'}" — ${data.quiz?.questions?.length || 0} question(s) below. Answer each one then hit Submit.`);
     } catch (err) {
         removeThinking();
@@ -214,7 +211,6 @@ async function submitQuiz() {
     try {
         const data = await postJSON('/api/quiz/mark', { quiz: Chat.quiz, answers });
         renderQuizResult(data.result);
-        renderSources(data.sources || [], data.retrieval_error);
     } catch (err) {
         showToast(err.message, 'error');
         if (btn) { btn.disabled = false; btn.textContent = 'Submit Answers'; }
@@ -260,7 +256,7 @@ function addMsg(role, text) {
     if (role === 'user') {
         av.innerHTML = userAvatarHTML();
     } else {
-        av.innerHTML = '<img src="/static/images/icon-192.png" width="25" height="25" alt="Assistant">';
+        av.innerHTML = '<img src="/static/images/icon-192.png" width="20" height="20" alt="Assistant">';
     }
 
     const bub = document.createElement('div');
@@ -310,47 +306,47 @@ function renderMD(raw) {
 
     // Headings
     s = s.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>');
-    s = s.replace(/^##\s+(.+)$/gm,  '<h3>$1</h3>');
-    // Bold / italic / code
-    s = s.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
-    s = s.replace(/\*(.+?)\*/g,     '<em>$1</em>');
-    s = s.replace(/`([^`]+)`/g,     '<code>$1</code>');
+    s = s.replace(/^##\s+(.+)$/gm,  '<h2>$1</h2>');
+    s = s.replace(/^#\s+(.+)$/gm,   '<h1>$1</h1>');
+
+    // Bold and italic
+    s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+    s = s.replace(/\*\*(.+?)\*\*/g,     '<strong>$1</strong>');
+    s = s.replace(/\*(.+?)\*/g,         '<em>$1</em>');
+
+    // Inline code
+    s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+
+    // Horizontal rule
+    s = s.replace(/^---$/gm, '<hr>');
+
+    // Coloured text via custom syntax: [text]{colour}
+    s = s.replace(/\[(.+?)\]\{(red|green|blue|orange|purple|yellow|teal|pink)\}/g,
+        '<span class="chat-colour-$2">$1</span>');
 
     // Block split
     const blocks = s.split(/\n{2,}/);
     return blocks.map(b => {
         b = b.trim();
         if (!b) return '';
-        if (b.startsWith('<h3>')) return b;
+        if (b.startsWith('<h') || b.startsWith('<hr')) return b;
+
         const lines = b.split('\n').map(l => l.trim()).filter(Boolean);
+
+        // Unordered lists
         if (lines.every(l => /^[-*•]\s/.test(l)))
-            return `<ul>${lines.map(l=>`<li>${l.replace(/^[-*•]\s/,'')}</li>`).join('')}</ul>`;
+            return `<ul>${lines.map(l => `<li>${l.replace(/^[-*•]\s/, '')}</li>`).join('')}</ul>`;
+
+        // Ordered lists
         if (lines.every(l => /^\d+\.\s/.test(l)))
-            return `<ol>${lines.map(l=>`<li>${l.replace(/^\d+\.\s/,'')}</li>`).join('')}</ol>`;
+            return `<ol>${lines.map(l => `<li>${l.replace(/^\d+\.\s/, '')}</li>`).join('')}</ol>`;
+
+        // Blockquote
+        if (lines.every(l => /^>\s/.test(l)))
+            return `<blockquote>${lines.map(l => l.replace(/^>\s/, '')).join('<br>')}</blockquote>`;
+
         return `<p>${lines.join('<br>')}</p>`;
     }).join('') || '<p>No response.</p>';
-}
-
-// ── SOURCES ──────────────────────────────────────────────────────
-function renderSources(sources, retriErr) {
-    if (!sources?.length) {
-        EL.sources.innerHTML = retriErr
-            ? `<p class="sources-empty" style="color:#b45309">⚠️ ${escH(retriErr)}</p>`
-            : '<p class="sources-empty">Retrieved citations appear here after each response.</p>';
-        return;
-    }
-    EL.sources.innerHTML = sources.map(s => {
-        const pct = s.relevance ? Math.round(s.relevance * 100) : null;
-        return `<div class="source-item">
-            <span class="source-title">${escH(s.label || s.source || 'Source')}</span>
-            <div class="source-meta">
-                ${s.subject ? `<strong>${escH(s.subject)}</strong>` : ''}
-                ${s.module && s.module !== 'General' ? ` · ${escH(s.module)}` : ''}
-                ${s.source_type ? `<br>${escH(s.source_type)}` : ''}
-            </div>
-            ${pct !== null ? `<span class="source-relevance">${pct}% match</span>` : ''}
-        </div>`;
-    }).join('');
 }
 
 // ── CLEAR ────────────────────────────────────────────────────────
@@ -362,7 +358,6 @@ async function clearChat() {
     EL.quizArea.classList.add('hidden');
     EL.quizArea.innerHTML = '';
     Chat.quiz = null;
-    renderSources([], null);
     addMsg('assistant', 'Chat cleared. What would you like to study next?');
 }
 
@@ -492,7 +487,6 @@ async function createNewChat() {
         EL.quizArea.classList.add('hidden');
         EL.quizArea.innerHTML = '';
         Chat.quiz = null;
-        renderSources([], null);
         addMsg('assistant', 'New chat started. What would you like to study?');
         
         await loadChatSessions();
@@ -522,8 +516,6 @@ async function loadChat(sessionID) {
                 addMsg('assistant', msg.content);
             }
         });
-        
-        renderSources([], null);
         renderChatHistory();
     } catch (err) {
         showToast(err.message, 'error');
