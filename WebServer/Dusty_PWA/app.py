@@ -363,7 +363,7 @@ def login_validation():
         session['user_email'] = email
         session['logged_in'] = True
 
-        return redirect(url_for('home')), jsonify({
+        return jsonify({
             "success": True,
             "message": "Login successful!"
         }), 200
