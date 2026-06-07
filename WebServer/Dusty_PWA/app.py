@@ -43,7 +43,8 @@ CORS(app)
 def login_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        if not session.get('logged_in'):
+        if not session.get('logged_in') or not session.get('user_id'):
+            session.clear()
             return redirect('/login')
         return f(*args, **kwargs)
     return decorated_function
@@ -164,6 +165,7 @@ def _coerce_int(value, default, minimum=None, maximum=None):
 
 def _load_user_settings(raw_settings):
     if not raw_settings:
+        print("[SETTINGS] No userSettings found, using defaults.")
         return {}
     if isinstance(raw_settings, dict):
         return raw_settings
@@ -171,6 +173,7 @@ def _load_user_settings(raw_settings):
         parsed = json.loads(raw_settings)
         return parsed if isinstance(parsed, dict) else {}
     except Exception:
+        print("[SETTINGS] Could not parse userSettings JSON:", raw_settings)
         return {}
 
 
@@ -337,39 +340,48 @@ def debug_db():
             print("[DB DEBUG] error inspecting DB:", e)
             traceback.print_exc()
 
+
 # User Authentication (Login/Signup)
 @app.route('/login_validation', methods=['POST'])
 def login_validation():
-    email    = request.form.get('email', '').strip()
-    password = request.form.get('password', '').strip()
+    email = request.form.get('email')
+    password = request.form.get('password')
 
     conn = get_db_connection()
+
     user = conn.execute(
         'SELECT userID, userName, userPassword, userSettings FROM users WHERE userEmail = ?',
         (email,)
     ).fetchone()
     conn.close()
 
-    authenticated = False
-    if user:
-        if user['userID'] == 1 and password == 'DustyAdminPass123!':
-            authenticated = True
-        elif check_password_hash(user['userPassword'], password):
-            authenticated = True
+    conn.close()
 
-    if not authenticated:
-        return redirect(url_for('login') + '?error=invalid_credentials')
+    if user and user[0] == 1 and password == 'DustyAdminPass123!':
+        session['user_id'] = user[0]
+        session['user_name'] = user[1]
+        session['user_email'] = email
+        session['logged_in'] = True
 
-    session['user_id']    = user['userID']
-    session['user_name']  = user['userName']
-    session['user_email'] = email
-    session['logged_in']  = True
-
-    settings = _load_user_settings(user['userSettings'])
-    if not _scheduler_onboarding_complete(settings):
-        return redirect(url_for('onboarding'))
-
-    return redirect(url_for('home'))
+        return redirect(url_for('home')), jsonify({
+            "success": True,
+            "message": "Login successful!"
+        }), 200
+    elif user and check_password_hash(user[2], password):
+        session['user_id'] = user[0]
+        session['user_name'] = user[1]
+        session['user_email'] = email
+        session['logged_in'] = True
+        
+        return jsonify({
+            "success": True,
+            "message": "Login successful!"
+        }), 200
+    else:
+        return jsonify({
+            "success": False,
+            "message": "Invalid credentials!"
+        }), 401
 
 @app.route('/add_user', methods=['POST'])
 def add_user():
