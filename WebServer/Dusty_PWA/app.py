@@ -37,7 +37,7 @@ app = Flask(
     template_folder = basedir,
     static_folder = os.path.join(basedir, 'static')
 )
-app.config["SECRET_KEY"] = "DM5Ucb]yh>d]FyK!8W|$v+cXwC-bB}jw"
+app.secret_key = os.getenv('SECRET_KEY', 'dusty-dev-secret-key-change-this')
 CORS(app)
 
 def login_required(f):
@@ -337,113 +337,87 @@ def debug_db():
             print("[DB DEBUG] error inspecting DB:", e)
             traceback.print_exc()
 
-def session_elapsed_time():
-    session_start = session.get("session_start")
-
-    if not session_start:
-        return 999999
-
-    try:
-        start_time = datetime.fromisoformat(session_start)
-    except (TypeError, ValueError):
-        return 999999
-
-    elapsed = datetime.now() - start_time
-
-    return elapsed.total_seconds() / 60
-
-@app.before_request
-def check_session_timeout():
-
-    if not session.get("logged_in"):
-        return
-
-    limit = 30 if session.get("user_id") == 1 else 15
-
-    if session_elapsed_time() > limit:
-        session.clear()
-        return jsonify({
-            "success": False,
-            "message": "Session expired."
-        }), 401
-
 # User Authentication (Login/Signup)
 @app.route('/login_validation', methods=['POST'])
 def login_validation():
-    email = request.form.get('email')
-    password = request.form.get('password')
-    
-    connection = sqlite3.connect(os.path.join(basedir, 'dusty.db'))
-    cursor = connection.cursor()
+    email    = request.form.get('email', '').strip()
+    password = request.form.get('password', '').strip()
 
-    user = cursor.execute("SELECT userID, userName, userPassword FROM users WHERE userEmail=?", (email,)).fetchone()
-    
-    connection.close()
-    
-    if user and user[0] == 1 and password == 'DustyAdminPass123!':
-        session['user_id'] = user[0]
-        session['user_name'] = user[1]
-        session['user_email'] = email
-        session['logged_in'] = True
-        session['session_start'] = datetime.now().isoformat()  # Admin-specific session variable for tracking time elapsed in the dashboard
-        return jsonify({
-            "success": True,
-            "message": "Login successful!"
-        }), 200
-    elif user and check_password_hash(user[2], password):
-        session['user_id'] = user[0]
-        session['user_name'] = user[1]
-        session['user_email'] = email
-        session['logged_in'] = True
-        session['session_start'] = datetime.now().isoformat()  # Initialize session start time for regular users as well
-        return jsonify({
-            "success": True,
-            "message": "Login successful!"
-        }), 200
-    else:
-        return jsonify({
-            "success": False,
-            "message": "Invalid credentials!"
-        }), 401
+    conn = get_db_connection()
+    user = conn.execute(
+        'SELECT userID, userName, userPassword, userSettings FROM users WHERE userEmail = ?',
+        (email,)
+    ).fetchone()
+    conn.close()
+
+    authenticated = False
+    if user:
+        if user['userID'] == 1 and password == 'DustyAdminPass123!':
+            authenticated = True
+        elif check_password_hash(user['userPassword'], password):
+            authenticated = True
+
+    if not authenticated:
+        return redirect(url_for('login') + '?error=invalid_credentials')
+
+    session['user_id']    = user['userID']
+    session['user_name']  = user['userName']
+    session['user_email'] = email
+    session['logged_in']  = True
+
+    settings = _load_user_settings(user['userSettings'])
+    if not _scheduler_onboarding_complete(settings):
+        return redirect(url_for('onboarding'))
+
+    return redirect(url_for('home'))
 
 @app.route('/add_user', methods=['POST'])
 def add_user():
-    email = request.form.get('email')
-    username = request.form.get('username')
-    password = request.form.get('password')
-    
-    connection = get_db_connection()
-    cursor = connection.cursor()
+    email    = request.form.get('email', '').strip()
+    username = request.form.get('username', '').strip()
+    password = request.form.get('password', '').strip()
 
-    existing = cursor.execute("SELECT 1 FROM users WHERE userEmail=?", (email,)).fetchone()
+    if not email or not username or not password:
+        return redirect(url_for('signup') + '?error=missing_fields')
+
+    conn = get_db_connection()
+    existing = conn.execute(
+        'SELECT 1 FROM users WHERE userEmail = ?', (email,)
+    ).fetchone()
 
     if existing:
-        connection.close()
-        return jsonify({
-            "success": False,
-            "title": "Account Exists",
-            "message": "An account with this email already exists. Please login instead."
-        }), 409
+        conn.close()
+        return redirect(url_for('signup') + '?error=email_exists')
 
-    if email != 'admin@gamify.com':
-        hashed_password = generate_password_hash(password)
-
-    cursor.execute("INSERT INTO users (userEmail, userName, userPassword) VALUES (?, ?, ?)", (email, username, hashed_password))
-    connection.commit()
-    # auto-login the newly created user so we can show the post-signup modal
+    hashed_password = generate_password_hash(password)
+    cursor = conn.execute(
+        'INSERT INTO users (userEmail, userName, userPassword) VALUES (?, ?, ?)',
+        (email, username, hashed_password)
+    )
+    conn.commit()
     user_id = cursor.lastrowid
-    connection.close()
+    conn.close()
 
-    session['user_id'] = user_id
-    session['user_name'] = username
+    session['user_id']    = user_id
+    session['user_name']  = username
     session['user_email'] = email
-    session['logged_in'] = True
+    session['logged_in']  = True
 
-    return jsonify({
-        "success": True,
-        "title": "Signup Successful",
-        "message": "Your account has been created successfully."
-    }), 201
+    return redirect(url_for('onboarding'))
+
+@app.route('/onboarding')
+@login_required
+def onboarding():
+    user_id = session.get('user_id')
+    conn = get_db_connection()
+    row = conn.execute(
+        'SELECT userSettings FROM users WHERE userID = ?', (user_id,)
+    ).fetchone()
+    conn.close()
+    settings = _load_user_settings(row['userSettings'] if row else None)
+    if _scheduler_onboarding_complete(settings):
+        return redirect(url_for('home'))
+    return render_template('onboarding.html')
 
 @app.route('/api/subjects', methods=['GET'])
 @login_required

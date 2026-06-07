@@ -39,6 +39,8 @@
           <input id="password" name="password" type="password" required minlength="6" placeholder="••••••••" />
         </div>
 
+        <p id="loginError" style="color:#ff6b6b;font-size:13px;margin-bottom:8px;min-height:18px"></p>
+
         <div class="actions">
           <button type="submit" value="login">Sign in</button>
         </div>
@@ -78,6 +80,16 @@
         window.addEventListener('pointerleave', reset);
         window.addEventListener('blur', reset);
       })();
+
+      // Show server-side errors
+      const loginParams = new URLSearchParams(window.location.search);
+      const loginErrEl  = document.getElementById('loginError');
+      if (loginErrEl) {
+          if (loginParams.get('error') === 'invalid_credentials')
+              loginErrEl.textContent = 'Incorrect email or password.';
+          else if (loginParams.get('error') === 'session_expired')
+              loginErrEl.textContent = 'Your session expired. Please sign in again.';
+      }
 
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.register('/sw.js').catch(()=>{});

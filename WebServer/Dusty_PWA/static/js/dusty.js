@@ -55,43 +55,6 @@ if (loginForm) {
     });
 }
 
-const signupForm = document.getElementById('signupForm');
-if (signupForm) {
-    signupForm.addEventListener('submit', function(e) {
-        e.preventDefault();
-
-        if (!this.checkValidity()) {
-            this.reportValidity();
-            return;
-        }
-
-        const pw = document.getElementById('password').value;
-        const cpw = document.getElementById('confirmPassword').value;
-
-        if (pw !== cpw) {
-            showPopup("Signup Error", "Passwords do not match.");
-            return;
-        }
-
-        fetch("/add_user", {
-            method: "POST",
-            body: new FormData(this)
-        })
-
-        .then(res => res.json())
-        .then(data => {
-            showPopup(data.title, data.message, () => {
-                if (data.success) {
-                    openPrefsModal();
-                }
-            });
-        })
-        .catch(() => {
-            showPopup("Server Error", "Something went wrong. Please try again later.");
-        });
-    });
-}
-
 document.querySelectorAll('.game-card').forEach(card => {
   card.addEventListener('click', () => {
     const banner = card.dataset.banner;
@@ -586,18 +549,64 @@ window.addEventListener('DOMContentLoaded', ensureSidebarDrawer);
 
 // Preferences Modal Management
 const SUBJECTS = [
-    { key: 'biology',       label: 'Biology',               defaultColour: 'green' },
-    { key: 'chemistry',     label: 'Chemistry',             defaultColour: 'blue' },
-    { key: 'physics',       label: 'Physics',               defaultColour: 'purple' },
-    { key: 'ext2_math',     label: 'Extension 2 Maths',     defaultColour: 'red' },
-    { key: 'ext1_math',     label: 'Extension 1 Maths',     defaultColour: 'orange' },
-    { key: 'advanced_math', label: 'Mathematics Advanced',  defaultColour: 'yellow' },
-    { key: 'eng_adv',       label: 'English Advanced',      defaultColour: 'brown' },
-    { key: 'eng_std',       label: 'English Standard',      defaultColour: 'brown' },
-    { key: 'software_eng',  label: 'Software Engineering',  defaultColour: 'blue' },
-    { key: 'economics',     label: 'Economics',             defaultColour: 'green' },
-    { key: 'legal',         label: 'Legal Studies',         defaultColour: 'purple' },
-    { key: 'history',       label: 'Modern History',        defaultColour: 'red' },
+    // Mathematics
+    { key: 'advanced_math',  label: 'Mathematics Advanced',       defaultColour: 'blue'   },
+    { key: 'std_math',       label: 'Mathematics Standard 2',     defaultColour: 'teal'   },
+    { key: 'ext1_math',      label: 'Mathematics Extension 1',    defaultColour: 'orange' },
+    { key: 'ext2_math',      label: 'Mathematics Extension 2',    defaultColour: 'red'    },
+
+    // English
+    { key: 'eng_adv',        label: 'English Advanced',           defaultColour: 'green'  },
+    { key: 'eng_std',        label: 'English Standard',           defaultColour: 'green'  },
+    { key: 'eng_ext1',       label: 'English Extension 1',        defaultColour: 'brown'  },
+    { key: 'eng_ext2',       label: 'English Extension 2',        defaultColour: 'brown'  },
+
+    // Sciences
+    { key: 'biology',        label: 'Biology',                    defaultColour: 'green'  },
+    { key: 'chemistry',      label: 'Chemistry',                  defaultColour: 'blue'   },
+    { key: 'physics',        label: 'Physics',                    defaultColour: 'purple' },
+    { key: 'earth_science',  label: 'Earth and Environmental',    defaultColour: 'teal'   },
+    { key: 'psychology',     label: 'Psychology',                 defaultColour: 'pink'   },
+
+    // Humanities and Social Sciences
+    { key: 'modern_history', label: 'Modern History',             defaultColour: 'red'    },
+    { key: 'ancient_history',label: 'Ancient History',            defaultColour: 'brown'  },
+    { key: 'economics',      label: 'Economics',                  defaultColour: 'orange' },
+    { key: 'legal',          label: 'Legal Studies',              defaultColour: 'purple' },
+    { key: 'business',       label: 'Business Studies',           defaultColour: 'orange' },
+    { key: 'geography',      label: 'Geography',                  defaultColour: 'teal'   },
+    { key: 'society_culture',label: 'Society and Culture',        defaultColour: 'pink'   },
+    { key: 'history_ext',    label: 'History Extension',          defaultColour: 'red'    },
+
+    // Technology
+    { key: 'software_eng',   label: 'Software Engineering',       defaultColour: 'blue'   },
+    { key: 'ipt',            label: 'Information Processes',      defaultColour: 'teal'   },
+    { key: 'engineering',    label: 'Engineering Studies',        defaultColour: 'orange' },
+    { key: 'design_tech',    label: 'Design and Technology',      defaultColour: 'yellow' },
+    { key: 'industrial_tech',label: 'Industrial Technology',      defaultColour: 'brown'  },
+
+    // Creative Arts
+    { key: 'visual_arts',    label: 'Visual Arts',                defaultColour: 'pink'   },
+    { key: 'music1',         label: 'Music 1',                    defaultColour: 'purple' },
+    { key: 'music2',         label: 'Music 2',                    defaultColour: 'purple' },
+    { key: 'drama',          label: 'Drama',                      defaultColour: 'orange' },
+    { key: 'dance',          label: 'Dance',                      defaultColour: 'pink'   },
+
+    // PDHPE and Sport
+    { key: 'pdhpe',          label: 'PDHPE',                      defaultColour: 'green'  },
+    { key: 'community_family',label: 'Community and Family',      defaultColour: 'teal'   },
+    { key: 'sport_lifestyle', label: 'Sport, Lifestyle & Recreation', defaultColour: 'green'},
+
+    // Languages
+    { key: 'french',         label: 'French',                     defaultColour: 'blue'   },
+    { key: 'japanese',       label: 'Japanese',                   defaultColour: 'red'    },
+    { key: 'chinese',        label: 'Chinese',                    defaultColour: 'red'    },
+    { key: 'spanish',        label: 'Spanish',                    defaultColour: 'orange' },
+    { key: 'german',         label: 'German',                     defaultColour: 'brown'  },
+
+    // Other
+    { key: 'studies_religion', label: 'Studies of Religion',      defaultColour: 'purple' },
+    { key: 'general',          label: 'General',                  defaultColour: 'orange' },
 ];
  
 const COLOURS = {
@@ -612,204 +621,27 @@ const COLOURS = {
     pink:   { hex: '#be185d', rgb: '190,24,93',  label: 'Pink' },
 };
 
+const STUDY_TECHNIQUES = [
+    { key: 'spaced_repetition', label: 'Spaced Repetition',    desc: 'Review content over increasing intervals to build long-term retention.' },
+    { key: 'active_recall',     label: 'Active Recall',         desc: 'Test yourself without notes to strengthen memory and exam readiness.' },
+    { key: 'blurting',          label: 'Blurting',              desc: 'Write everything you remember, then compare with your notes.' },
+    { key: 'stoplight',         label: 'Stop-Light Method',     desc: 'Rate confidence as Red, Yellow or Green to identify knowledge gaps.' },
+    { key: 'interleaving',      label: 'Interleaving',          desc: 'Mix topics and subjects during study instead of blocking one at a time.' },
+    { key: 'retrieval',         label: 'Retrieval Practice',    desc: 'Practise recalling information using flashcards and practice questions.' },
+    { key: 'exam_questions',    label: 'Exam Style Questions',  desc: 'Practise timed HSC-style questions and review marking criteria.' },
+    { key: 'error_analysis',    label: 'Error Analysis',        desc: 'Review mistakes from quizzes and homework to target weak areas.' },
+    { key: 'worked_examples',   label: 'Worked Examples',       desc: 'Study model solutions before attempting similar problems yourself.' },
+    { key: 'past_papers',       label: 'Past Paper Practice',   desc: 'Complete full past HSC papers under timed exam conditions.' },
+];
+
 const prefsState = {
-    selected: new Set(),
-    colours: {}
+    selected:   new Set(),
+    colours:    {},
+    techniques: new Set(),
+    subjects:   []
 };
 
-function openPrefsModal() {
-    // Use setTimeout to ensure popup is fully removed before showing modal
-    setTimeout(() => {
-        const modal = document.getElementById('prefsModal');
-        if (modal) {
-            modal.classList.remove('hidden');
-            // Reset to first step
-            document.getElementById('stepPanel0')?.classList.add('visible');
-            document.getElementById('stepPanel1')?.classList.remove('visible');
-            document.getElementById('step0')?.classList.add('active');
-            document.getElementById('step0')?.classList.remove('done');
-            document.getElementById('step1')?.classList.remove('active');
-            document.getElementById('step1')?.classList.remove('done');
-            // Load subjects and build grid
-            loadSignupSubjects().then(() => {
-                prefsState.selected.clear();
-                prefsState.colours = {};
-                buildSubjectGrid();
-            }).catch(err => {
-                console.error('Failed to load subjects for preferences modal:', err);
-                showPopup('Error', 'Could not load subjects. Please try again.');
-            });
-        }
-    }, 50);
-}
-
-function closePrefsModal() {
-    const modal = document.getElementById('prefsModal');
-    if (modal) {
-        modal.classList.add('hidden');
-    }
-}
-
-async function loadSignupSubjects() {
-  try {
-    const res = await fetch('/api/subjects');
-    const data = await res.json();
-    if (res.ok && Array.isArray(data.subjects)) {
-      // Map to expected lightweight shape used in prefs modal
-      window.signupSubjects = data.subjects.map(s => ({
-        subjectID: s.subjectID,
-        subjectKey: String(s.subjectID),
-        subjectName: s.subjectName,
-        colourScheme: s.colourScheme || 'orange'
-      }));
-      return window.signupSubjects;
-    }
-  } catch (e) {
-    console.error('Could not fetch /api/subjects for signup modal', e);
-  }
-  // Fallback to built-in SUBJECTS list
-  window.signupSubjects = SUBJECTS.map(s => ({ subjectKey: s.key, subjectName: s.label, colourScheme: s.defaultColour }));
-  return window.signupSubjects;
-}
-
-function buildSubjectGrid() {
-    const grid = document.getElementById('subjectPresetGrid');
-    grid.innerHTML = SUBJECTS.map(s => {
-        const col = COLOURS[s.defaultColour] || COLOURS.orange;
-        return `
-            <button class="subject-preset-btn" type="button"
-                    data-key="${s.key}"
-                    style="--subj-col:${col.hex};--subj-col-rgb:${col.rgb}"
-                    onclick="toggleSubject(this, '${s.key}', '${s.defaultColour}')">
-                <span class="subj-check"></span>
-                <span>${s.label}</span>
-                <span class="subj-colour-dot"></span>
-            </button>`;
-    }).join('');
-}
-
-function toggleSubject(btn, key, defaultColour) {
-    if (prefsState.selected.has(key)) {
-        prefsState.selected.delete(key);
-        delete prefsState.colours[key];
-        btn.classList.remove('selected');
-    } else {
-        prefsState.selected.add(key);
-        prefsState.colours[key] = defaultColour;
-        btn.classList.add('selected');
-    }
-    /* Update button icon */
-    btn.querySelector('.subj-check').textContent = prefsState.selected.has(key) ? '✓' : '';
-    /* Enable/disable next button */
-    document.getElementById('nextStepBtn').disabled = prefsState.selected.size === 0;
-}
-
-function goToStep2() {
-    if (prefsState.selected.size === 0) return;
-    buildColourAssignments();
-    setStep(1);
-}
- 
-function goToStep1() { setStep(0); }
- 
-function setStep(n) {
-    [0,1].forEach(i => {
-        document.getElementById(`stepPanel${i}`).classList.toggle('visible', i === n);
-        document.getElementById(`step${i}`).className = 'prefs-step' + (i < n ? ' done' : i === n ? ' active' : '');
-    });
-}
-
-function buildColourAssignments() {
-    const wrap = document.getElementById('colourAssignments');
-    const selectedSubjects = SUBJECTS.filter(s => prefsState.selected.has(s.key));
- 
-    wrap.innerHTML = selectedSubjects.map(s => {
-        const swatches = Object.entries(COLOURS).map(([key, c]) => {
-            const isActive = prefsState.colours[s.key] === key;
-            return `<div class="colour-swatch ${isActive ? 'active' : ''}"
-                        style="background:${c.hex}"
-                        title="${c.label}"
-                        onclick="pickColour('${s.key}', '${key}', this)"></div>`;
-        }).join('');
- 
-        return `
-            <div class="colour-row" id="crow-${s.key}">
-                <span class="colour-row-name">${s.label}</span>
-                <div class="colour-swatches">${swatches}</div>
-            </div>`;
-    }).join('');
-}
-
-function pickColour(subjectKey, colourKey, swatchEl) {
-    prefsState.colours[subjectKey] = colourKey;
-    /* Deactivate all swatches in this row, activate picked one */
-    const row = swatchEl.closest('.colour-row');
-    row.querySelectorAll('.colour-swatch').forEach(s => s.classList.remove('active'));
-    swatchEl.classList.add('active');
-}
-
-async function savePreferences() {
-    const btn = document.getElementById('savePrefsBtn');
-      if (btn) btn.disabled = true;
-      
-      if (prefsState.selected.size === 0) {
-          showPopup('No Subjects', 'Please select at least one subject.');
-          if (btn) btn.disabled = false;
-          return;
-      }
-    
-    try {
-        const payload = {
-            subjects: Array.from(prefsState.selected).map(subjectKey => {
-                const subject = SUBJECTS.find(s => s.key === subjectKey);
-                return {
-                    subjectKey,
-                    subjectName: subject ? subject.label : subjectKey,
-                    colourScheme: prefsState.colours[subjectKey] || 'orange'
-                };
-            })
-        };
-
-        const response = await fetch('/api/user/preferences', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        const data = await response.json().catch(() => ({}));
-
-        if (response.ok && data.success) {
-            const signupSubjects = window.signupSubjects || [];
-            const colourMap = {};
-            signupSubjects.forEach(s => {
-                if (prefsState.selected.has(String(s.subjectID || s.subjectKey))) {
-                    colourMap[s.subjectName] = prefsState.colours[String(s.subjectID || s.subjectKey)] || s.colourScheme || 'orange';
-                }
-            });
-            localStorage.setItem('dusty.subjectColours', JSON.stringify(colourMap));
-            window.location.href = '/home';
-            return;
-        } else {
-            showPopup('Preferences Error', data.error || 'Could not save preferences. Please try again.');
-            if (btn) btn.disabled = false;
-        }
-    } catch (err) {
-        console.error('[Preferences] Save error:', err);
-        showPopup('Network Error', 'Unable to save preferences right now. Please try again.');
-        if (btn) btn.disabled = false;
-    }
-}
-
-function skipPrefs() {
-    if (window.location.pathname.replace(/\/$/, '') === '/signup') {
-        window.location.href = '/home';
-        return;
-    }
-    sessionStorage.setItem('dusty.skipSchedulerOnboarding', '1');
-    closePrefsModal();
-}
-
-/* Scheduler onboarding v2: overrides the older signup-only preference helpers above. */
-prefsState.subjects = [];
+/* Onboarding */
 
 function openPrefsModal() {
     setTimeout(() => {
@@ -832,30 +664,26 @@ function openPrefsModal() {
 }
 
 async function loadSignupSubjects() {
-    try {
-        const res = await fetch('/api/user/preferences');
-        const data = await res.json();
-        if (res.ok && Array.isArray(data.subjects)) {
-            window.signupSubjects = data.subjects.map(s => ({
-                subjectID: s.subjectID,
-                subjectKey: String(s.subjectID),
-                subjectName: s.subjectName,
-                colourScheme: normalizeColour(s.colourScheme || 'orange')
-            }));
-            prefsState.subjects = window.signupSubjects;
-            populateSchedulerPrefs(data.scheduler || {});
-            return window.signupSubjects;
-        }
-    } catch (e) {
-        console.error('Could not fetch /api/user/preferences for signup modal', e);
-    }
-
+    // Always use the full hardcoded SUBJECTS list for onboarding
+    // Never use DB subjects here — the user is choosing what they want
     window.signupSubjects = SUBJECTS.map(s => ({
-        subjectKey: s.key,
-        subjectName: s.label,
+        subjectKey:   s.key,
+        subjectName:  s.label,
         colourScheme: normalizeColour(s.defaultColour || 'orange')
     }));
     prefsState.subjects = window.signupSubjects;
+
+    // Still load scheduler prefs if they exist (for returning users redoing onboarding)
+    try {
+        const res = await fetch('/api/user/preferences');
+        const data = await res.json();
+        if (res.ok && data.scheduler) {
+            populateSchedulerPrefs(data.scheduler);
+        }
+    } catch (e) {
+        // Ignore — scheduler prefs are optional during onboarding
+    }
+
     return window.signupSubjects;
 }
 
@@ -908,11 +736,16 @@ function goToStep2() {
 function goToStep3() { setStep(2); }
 
 function setStep(n) {
-    [0, 1, 2].forEach(i => {
+    [0, 1, 2, 3].forEach(i => {
         document.getElementById(`stepPanel${i}`)?.classList.toggle('visible', i === n);
         const step = document.getElementById(`step${i}`);
         if (step) step.className = 'prefs-step' + (i < n ? ' done' : i === n ? ' active' : '');
     });
+}
+
+function goToStep4() {
+    buildTechniquesGrid();
+    setStep(3);
 }
 
 function buildColourAssignments() {
@@ -940,6 +773,35 @@ function buildColourAssignments() {
     }).join('');
 }
 
+function buildTechniquesGrid() {
+    const grid = document.getElementById('techniquesGrid');
+    if (!grid) return;
+    grid.innerHTML = STUDY_TECHNIQUES.map(t => `
+        <div class="technique-card ${prefsState.techniques?.has(t.key) ? 'selected' : ''}"
+             id="tech-${t.key}"
+             onclick="toggleTechnique('${t.key}', this)">
+            <div class="technique-check">${prefsState.techniques?.has(t.key) ? '✓' : ''}</div>
+            <div class="technique-info">
+                <strong>${escapeHtml(t.label)}</strong>
+                <span>${escapeHtml(t.desc)}</span>
+            </div>
+        </div>
+    `).join('');
+}
+
+function toggleTechnique(key, card) {
+    if (!prefsState.techniques) prefsState.techniques = new Set();
+    if (prefsState.techniques.has(key)) {
+        prefsState.techniques.delete(key);
+        card.classList.remove('selected');
+        card.querySelector('.technique-check').textContent = '';
+    } else {
+        prefsState.techniques.add(key);
+        card.classList.add('selected');
+        card.querySelector('.technique-check').textContent = '✓';
+    }
+}
+
 async function savePreferences() {
     const btn = document.getElementById('savePrefsBtn');
     if (btn) btn.disabled = true;
@@ -952,37 +814,43 @@ async function savePreferences() {
 
     try {
         const subjects = prefsState.subjects || [];
-        const payload = {
-            theme: 'light',
-            subjects: Array.from(prefsState.selected).map(subjectKey => {
-                const subject = subjects.find(s => String(s.subjectID || s.subjectKey) === subjectKey);
-                return {
-                    subjectID: subject?.subjectID ? Number(subject.subjectID) : undefined,
-                    subjectName: subject ? (subject.subjectName || subject.label) : subjectKey,
-                    colourScheme: prefsState.colours[subjectKey] || 'orange'
-                };
-            }),
-            scheduler: collectSchedulerPreferences()
-        };
+
+        // Build subject list — for new users subjectID may not exist yet
+        const subjectPayload = Array.from(prefsState.selected).map(subjectKey => {
+            const subject = subjects.find(s => String(s.subjectID || s.subjectKey) === subjectKey);
+            const payload = {
+                colourScheme: prefsState.colours[subjectKey] || 'orange'
+            };
+
+            // Only include subjectID if it's a real integer (existing DB subject)
+            if (subject?.subjectID && Number.isInteger(Number(subject.subjectID))) {
+                payload.subjectID = Number(subject.subjectID);
+            }
+
+            // Always include subjectName as fallback
+            payload.subjectName = subject
+                ? (subject.subjectName || subject.label || subjectKey)
+                : subjectKey;
+
+            return payload;
+        });
 
         const response = await fetch('/api/user/preferences', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
+            body: JSON.stringify({
+                theme: 'light',
+                subjects: subjectPayload,
+                scheduler: collectSchedulerPreferences()
+            })
         });
+
         const data = await response.json().catch(() => ({}));
 
         if (response.ok && data.success) {
-            const colourMap = {};
-            subjects.forEach(s => {
-                const key = String(s.subjectID || s.subjectKey);
-                if (prefsState.selected.has(key)) {
-                    colourMap[s.subjectName || s.label] = prefsState.colours[key] || s.colourScheme || 'orange';
-                }
-            });
-            localStorage.setItem('dusty.subjectColours', JSON.stringify(colourMap));
-
-            if (window.location.pathname.replace(/\/$/, '') === '/signup') {
+            // Always redirect to home — works for both onboarding and profile edits
+            const path = window.location.pathname.replace(/\/$/, '');
+            if (path === '/onboarding' || path === '/signup') {
                 window.location.href = '/home';
             } else {
                 closePrefsModal();
@@ -993,6 +861,7 @@ async function savePreferences() {
 
         showPopup('Preferences Error', data.error || 'Could not save preferences. Please try again.');
         if (btn) btn.disabled = false;
+
     } catch (err) {
         console.error('[Preferences] Save error:', err);
         showPopup('Network Error', 'Unable to save preferences right now. Please try again.');
@@ -1002,16 +871,22 @@ async function savePreferences() {
 
 function collectSchedulerPreferences() {
     return {
-        study_start: Number(document.getElementById('studyStartTime')?.value || 8),
-        study_end: Number(document.getElementById('studyEndTime')?.value || 22),
-        sleep_start: Number(document.getElementById('sleepStartTime')?.value || 22),
-        sleep_end: Number(document.getElementById('sleepEndTime')?.value || 7),
-        school_start: Number(document.getElementById('schoolStartTime')?.value || 9),
-        school_end: Number(document.getElementById('schoolEndTime')?.value || 15),
-        max_daily_hours: Number(document.getElementById('maxDailyStudy')?.value || 4),
-        session_duration: Number(document.getElementById('sessionDuration')?.value || 60),
-        break_duration: Number(document.getElementById('breakDuration')?.value || 10),
-        priority_subjects: Array.from(prefsState.selected),
+        study_start:         Number(document.getElementById('studyStartTime')?.value  || 8),
+        study_end:           Number(document.getElementById('studyEndTime')?.value    || 22),
+        sleep_start:         Number(document.getElementById('sleepStartTime')?.value  || 22),
+        sleep_end:           Number(document.getElementById('sleepEndTime')?.value    || 7),
+        school_start:        Number(document.getElementById('schoolStartTime')?.value || 9),
+        school_end:          Number(document.getElementById('schoolEndTime')?.value   || 15),
+        max_daily_hours:     Number(document.getElementById('maxDailyStudy')?.value   || 4),
+        session_duration:    Number(document.getElementById('sessionDuration')?.value || 60),
+        break_duration:      Number(document.getElementById('breakDuration')?.value   || 10),
+        priority_subjects:   Array.from(prefsState.selected),
+        study_techniques:    prefsState.techniques && prefsState.techniques.size > 0
+                                 ? Array.from(prefsState.techniques).map(k => {
+                                       const t = STUDY_TECHNIQUES.find(t => t.key === k);
+                                       return t ? t.label : k;
+                                   })
+                                 : STUDY_TECHNIQUES.map(t => t.label), // default all if none selected
         scheduler_onboarded: true
     };
 }
@@ -1059,36 +934,54 @@ function ensurePrefsModal() {
     modal.setAttribute('aria-modal', 'true');
     modal.innerHTML = `
         <div class="prefs-box">
-            <div class="prefs-logo"><img src="/static/images/transp512.png" alt="Dusty"></div>
+            <div class="prefs-logo"><img src="/static/images/transp192_copy.png" alt="Dusty"></div>
             <h2 class="prefs-heading" id="prefsHeading">Set up your study scheduler</h2>
-            <p class="prefs-sub">Choose your subjects, colours, and the study hours Dusty should protect.</p>
+            <p class="prefs-sub">Choose your subjects, colours, study hours and preferred techniques.</p>
             <div class="prefs-steps">
                 <div class="prefs-step active" id="step0"></div>
                 <div class="prefs-step" id="step1"></div>
                 <div class="prefs-step" id="step2"></div>
+                <div class="prefs-step" id="step3"></div>
             </div>
+
+            <!-- Step 0: Subjects -->
             <div class="prefs-step-panel visible" id="stepPanel0">
                 <p class="prefs-section-label">Your HSC Subjects</p>
                 <div class="subject-preset-grid" id="subjectPresetGrid"></div>
                 <div class="prefs-actions">
                     <button class="btn-prefs-skip" type="button" onclick="skipPrefs()">Skip for now</button>
-                    <button class="btn-prefs-save" type="button" id="nextStepBtn" onclick="goToStep2()" disabled>Choose Colours</button>
+                    <button class="btn-prefs-save" type="button" id="nextStepBtn" onclick="goToStep2()" disabled>Choose Colours →</button>
                 </div>
             </div>
+
+            <!-- Step 1: Colours -->
             <div class="prefs-step-panel" id="stepPanel1">
                 <p class="prefs-section-label">Subject Colours</p>
                 <div class="colour-assignments" id="colourAssignments"></div>
                 <div class="prefs-actions">
-                    <button class="btn-prefs-skip" type="button" onclick="goToStep1()">Back</button>
-                    <button class="btn-prefs-save" type="button" onclick="goToStep3()">Schedule Settings</button>
+                    <button class="btn-prefs-skip" type="button" onclick="goToStep1()">← Back</button>
+                    <button class="btn-prefs-save" type="button" onclick="goToStep3()">Schedule Settings →</button>
                 </div>
             </div>
+
+            <!-- Step 2: Schedule -->
             <div class="prefs-step-panel" id="stepPanel2">
                 <p class="prefs-section-label">Study Schedule</p>
                 <div class="schedule-prefs-grid" id="schedulePrefsGrid"></div>
                 <div class="prefs-actions">
-                    <button class="btn-prefs-skip" type="button" onclick="goToStep2()">Back</button>
-                    <button class="btn-prefs-save" type="button" id="savePrefsBtn" onclick="savePreferences()">Save & Get Started</button>
+                    <button class="btn-prefs-skip" type="button" onclick="goToStep2()">← Back</button>
+                    <button class="btn-prefs-save" type="button" onclick="goToStep4()">Study Techniques →</button>
+                </div>
+            </div>
+
+            <!-- Step 3: Techniques -->
+            <div class="prefs-step-panel" id="stepPanel3">
+                <p class="prefs-section-label">Preferred Study Techniques</p>
+                <p style="font-size:13px;color:#888;margin:0 0 14px">Select the techniques you want Dusty to prioritise when generating your schedule. You can select multiple.</p>
+                <div class="techniques-grid" id="techniquesGrid"></div>
+                <div class="prefs-actions">
+                    <button class="btn-prefs-skip" type="button" onclick="goToStep3()">← Back</button>
+                    <button class="btn-prefs-save" type="button" id="savePrefsBtn" onclick="savePreferences()">Save &amp; Get Started 🚀</button>
                 </div>
                 <p class="prefs-note">You can change these anytime from your Profile settings.</p>
             </div>
@@ -1150,9 +1043,27 @@ function injectPrefsStyles() {
         .colour-assignments{display:grid;gap:10px}.colour-row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px;border:1px solid rgba(0,0,0,.08);border-radius:12px}.colour-row-name{font-weight:700}.colour-swatches{display:flex;gap:8px;flex-wrap:wrap}.colour-swatch{width:24px;height:24px;border-radius:50%;cursor:pointer;border:3px solid transparent}.colour-swatch.active{border-color:#22140b}
         .schedule-prefs-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px}.schedule-pref-item{display:flex;flex-direction:column;gap:6px}.schedule-pref-label{font-size:11px;text-transform:uppercase;letter-spacing:.7px;font-weight:800;color:#888}.schedule-pref-select{padding:11px 12px;border-radius:10px;border:1.5px solid #e1e5e9;background:#fff;color:#22140b}
         .prefs-actions{display:flex;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-top:18px}.btn-prefs-skip,.btn-prefs-save{border:0;border-radius:12px;padding:11px 18px;font-weight:800;cursor:pointer}.btn-prefs-skip{background:#f3f4f6;color:#555}.btn-prefs-save{background:linear-gradient(135deg,#f5761c,#ee4319);color:#fff}.btn-prefs-save:disabled{opacity:.55;cursor:not-allowed}.prefs-note{font-size:12px;color:#888;margin:12px 0 0;text-align:right}
+        .techniques-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:10px;max-height:340px;overflow-y:auto;padding-right:4px}
+        .technique-card{display:flex;align-items:flex-start;gap:12px;padding:13px 14px;border:1.5px solid rgba(0,0,0,.1);border-radius:12px;background:#fff;cursor:pointer;transition:all .18s ease}
+        .technique-card:hover{border-color:rgba(245,118,28,.35);background:rgba(245,118,28,.04)}
+        .technique-card.selected{border-color:#f5761c;background:rgba(245,118,28,.08)}
+        .technique-check{width:22px;height:22px;border-radius:50%;border:1.5px solid #f5761c;display:inline-flex;align-items:center;justify-content:center;color:#f5761c;font-size:12px;font-weight:800;flex-shrink:0;margin-top:1px}
+        .technique-card.selected .technique-check{background:#f5761c;color:#fff}
+        .technique-info strong{display:block;font-size:13.5px;font-weight:700;color:#22140b;margin-bottom:3px}
+        .technique-info span{font-size:12px;color:#888;line-height:1.45}
         @media(max-width:640px){.prefs-box{padding:20px}.colour-row{align-items:flex-start;flex-direction:column}.prefs-actions{justify-content:stretch}.btn-prefs-skip,.btn-prefs-save{flex:1}}
     `;
     document.head.appendChild(style);
+}
+
+function skipPrefs() {
+    const path = window.location.pathname.replace(/\/$/, '');
+    if (path === '/onboarding' || path === '/signup') {
+        window.location.href = '/home';
+        return;
+    }
+    sessionStorage.setItem('dusty.skipSchedulerOnboarding', '1');
+    closePrefsModal();
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
