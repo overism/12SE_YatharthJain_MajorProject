@@ -24,13 +24,6 @@ GOOGLE_SCOPES = ['https://www.googleapis.com/auth/calendar']
 GOOGLE_CLIENT_SECRET_FILE = os.path.join(basedir, 'static', 'secrets', 'client_secret_2_718545971467-nk6uf6oai3gtf7lit9cac1gnkpur55a7.apps.googleusercontent.com.json')
 GOOGLE_CALENDAR_ID = 'primary'
 VALID_SUBJECT_COLOURS = {'orange', 'blue', 'green', 'red', 'purple', 'yellow', 'brown', 'amber', 'teal', 'pink'}
-DEFAULT_SUBJECTS = [
-    ('Software Engineering', 'orange'),
-    ('Mathematics', 'blue'),
-    ('English', 'green'),
-    ('Science', 'red'),
-    ('Humanities', 'purple'),
-]
 
 app = Flask(
     __name__,
@@ -111,28 +104,10 @@ def ensure_runtime_schema():
         ensure_column(conn, 'events', 'lastSynced', 'lastSynced DATETIME')
         ensure_column(conn, 'events', 'updatedAt', 'updatedAt DATETIME DEFAULT CURRENT_TIMESTAMP')
         ensure_column(conn, 'tasks', 'eventID', 'eventID INTEGER')
+        ensure_column(conn, 'subjects', 'isActive', 'isActive INTEGER DEFAULT 1')
         conn.commit()
     finally:
         conn.close()
-
-
-def ensure_user_subjects(conn, user_id):
-    """Guarantee each user has a usable subject set and colour palette."""
-    if not user_id:
-        return
-
-    existing = conn.execute(
-        'SELECT COUNT(*) AS count FROM subjects WHERE userID = ?',
-        (user_id,)
-    ).fetchone()['count']
-
-    if existing == 0:
-        for idx, (name, colour) in enumerate(DEFAULT_SUBJECTS, start=1):
-            conn.execute(
-                'INSERT INTO subjects (userID, subjectName, colourScheme, sortOrder) VALUES (?, ?, ?, ?)',
-                (user_id, name, colour, idx)
-            )
-        conn.commit()
 
 
 DEFAULT_SCHEDULER_SETTINGS = {
@@ -344,44 +319,42 @@ def debug_db():
 # User Authentication (Login/Signup)
 @app.route('/login_validation', methods=['POST'])
 def login_validation():
-    email = request.form.get('email')
-    password = request.form.get('password')
+    email    = request.form.get('email', '').strip()
+    password = request.form.get('password', '').strip()
+
+    if not email or not password:
+        return jsonify({"success": False, "message": "Email and password are required."}), 400
 
     conn = get_db_connection()
-
     user = conn.execute(
         'SELECT userID, userName, userPassword, userSettings FROM users WHERE userEmail = ?',
         (email,)
     ).fetchone()
-    conn.close()
+    conn.close()  # only once
 
-    conn.close()
+    authenticated = False
+    if user:
+        if user['userID'] == 1 and password == 'DustyAdminPass123!':
+            authenticated = True
+        elif check_password_hash(user['userPassword'], password):
+            authenticated = True
 
-    if user and user[0] == 1 and password == 'DustyAdminPass123!':
-        session['user_id'] = user[0]
-        session['user_name'] = user[1]
-        session['user_email'] = email
-        session['logged_in'] = True
+    if not authenticated:
+        return jsonify({"success": False, "message": "Invalid email or password."}), 401
 
-        return jsonify({
-            "success": True,
-            "message": "Login successful!"
-        }), 200
-    elif user and check_password_hash(user[2], password):
-        session['user_id'] = user[0]
-        session['user_name'] = user[1]
-        session['user_email'] = email
-        session['logged_in'] = True
-        
-        return jsonify({
-            "success": True,
-            "message": "Login successful!"
-        }), 200
-    else:
-        return jsonify({
-            "success": False,
-            "message": "Invalid credentials!"
-        }), 401
+    session['user_id']    = user['userID']
+    session['user_name']  = user['userName']
+    session['user_email'] = email
+    session['logged_in']  = True
+
+    settings = _load_user_settings(user['userSettings'])
+    redirect_url = url_for('home') if _scheduler_onboarding_complete(settings) else url_for('onboarding')
+
+    return jsonify({
+        "success":      True,
+        "message":      "Login successful!",
+        "redirect_url": redirect_url
+    }), 200
 
 @app.route('/add_user', methods=['POST'])
 def add_user():
@@ -437,11 +410,15 @@ def api_get_subjects():
     user_id = session.get('user_id')
     try:
         conn = get_db_connection()
-        ensure_user_subjects(conn, user_id)
-        rows = conn.execute('SELECT subjectID, subjectName, colourScheme FROM subjects WHERE userID = ? ORDER BY sortOrder, subjectID', (user_id,)).fetchall()
+        rows = conn.execute(
+            '''SELECT subjectID, subjectName, colourScheme
+               FROM subjects
+               WHERE userID = ? AND isActive = 1
+               ORDER BY sortOrder, subjectID''',
+            (user_id,)
+        ).fetchall()
         conn.close()
-        subjects = [dict(r) for r in rows]
-        return jsonify({'subjects': subjects})
+        return jsonify({'subjects': [dict(r) for r in rows]})
     except Exception as e:
         print('[API /api/subjects] Error:', e)
         return jsonify({'error': 'Could not load subjects'}), 500
@@ -464,8 +441,6 @@ def api_user_preferences():
     if request.method == 'GET':
         try:
             conn = get_db_connection()
-            print("CALLING ensure_user_subjects WITH:", user_id)
-            ensure_user_subjects(conn, user_id)
             user = conn.execute('SELECT userSettings FROM users WHERE userID = ?', (user_id,)).fetchone()
             settings = _load_user_settings(user['userSettings'] if user else None)
             subjects = conn.execute(
@@ -522,7 +497,6 @@ def api_user_preferences():
 
     try:
         conn = get_db_connection()
-        ensure_user_subjects(conn, user_id)
 
         # Resolve subject IDs and persist colour selections
         for item in normalized:
@@ -557,6 +531,23 @@ def api_user_preferences():
                 'UPDATE subjects SET colourScheme = ? WHERE userID = ? AND subjectID = ?',
                 (item['colourScheme'], user_id, item['subjectID'])
             )
+
+        # Deactivate subjects not in the selected list
+        selected_ids = [item['subjectID'] for item in normalized if item.get('subjectID')]
+        if selected_ids:
+            placeholders = ','.join('?' * len(selected_ids))
+            conn.execute(
+                f'''UPDATE subjects SET isActive = 0
+                    WHERE userID = ? AND subjectID NOT IN ({placeholders})''',
+                [user_id] + selected_ids
+            )
+        # Activate selected subjects (in case re-selecting a previously deactivated one)
+        for item in normalized:
+            if item.get('subjectID'):
+                conn.execute(
+                    'UPDATE subjects SET isActive = 1, colourScheme = ? WHERE userID = ? AND subjectID = ?',
+                    (item['colourScheme'], user_id, item['subjectID'])
+                )
 
         existing = conn.execute('SELECT userSettings FROM users WHERE userID = ?', (user_id,)).fetchone()
         prefs = _load_user_settings(existing['userSettings'] if existing else None)
@@ -1057,12 +1048,10 @@ def tasks():
                 ORDER BY dueDate ASC
             """, (user_id,)).fetchall()]
 
-        ensure_user_subjects(conn, user_id)
-
         subjects = [dict(row) for row in conn.execute("""
             SELECT subjectID, subjectName, colourScheme
             FROM subjects
-            WHERE userID = ?
+            WHERE userID = ? AND isActive = 1
             ORDER BY sortOrder, subjectID
         """, (user_id,)).fetchall()]
         conn.close()
@@ -2809,7 +2798,6 @@ def get_subjects():
     try:
         conn = get_db_connection()
         user_id = session.get('user_id')
-        ensure_user_subjects(conn, user_id)
         
         subjects = conn.execute(
             'SELECT * FROM subjects WHERE userID = ? ORDER BY sortOrder ASC',
@@ -3066,7 +3054,6 @@ def get_progress():
     user_id = session.get('user_id')
     try:
         conn = get_db_connection()
-        ensure_user_subjects(conn, user_id)
 
         task_stats = conn.execute(
             '''SELECT status, COUNT(*) as count, AVG(progress) as avg_progress

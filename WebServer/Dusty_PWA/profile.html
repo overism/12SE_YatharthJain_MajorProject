@@ -8,6 +8,7 @@
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}">
+    <script defer src="{{ url_for('static', filename='js/dusty.js') }}"></script>
 </head>
 <body>
     <script defer src="{{ url_for('static', filename='js/subject-colours.js') }}"></script>
@@ -61,69 +62,6 @@
             <button class="btn btn-outline" onclick="closeDeleteModal()">Cancel</button>
             <button class="btn btn-danger" id="confirmDeleteBtn" onclick="confirmDelete()">Delete My Account</button>
         </div>
-    </div>
-</div>
-
-<!-- Preferences Modal -->
-<div class="modal-overlay hidden" id="prefsModal">
-    <div class="modal-box">
-        <h2 class="modal-title">Preferences</h2>
-        <form id="prefsFormProfile">
-            <div style="margin-bottom:12px">
-                <label style="display:block;font-weight:700;margin-bottom:6px">Theme</label>
-                <label style="margin-right:12px"><input type="radio" name="theme" value="light"> Light</label>
-                <label><input type="radio" name="theme" value="dark"> Dark</label>
-            </div>
-            <div style="margin-bottom:8px">
-                <label style="display:block;font-weight:700;margin-bottom:6px">Your subjects</label>
-                <div id="prefsSubjectsProfile" style="display:flex;flex-wrap:wrap;gap:8px"></div>
-            </div>
-            <div style="margin-top:16px">
-                <label style="display:block;font-weight:700;margin-bottom:10px">Scheduler settings</label>
-                <div class="profile-scheduler-grid">
-                    <div class="form-row">
-                        <label class="form-label" for="profileStudyStart">Study Start</label>
-                        <select id="profileStudyStart" class="form-input"></select>
-                    </div>
-                    <div class="form-row">
-                        <label class="form-label" for="profileStudyEnd">Study End</label>
-                        <select id="profileStudyEnd" class="form-input"></select>
-                    </div>
-                    <div class="form-row">
-                        <label class="form-label" for="profileSleepStart">Sleep Time</label>
-                        <select id="profileSleepStart" class="form-input"></select>
-                    </div>
-                    <div class="form-row">
-                        <label class="form-label" for="profileSleepEnd">Wake Up</label>
-                        <select id="profileSleepEnd" class="form-input"></select>
-                    </div>
-                    <div class="form-row">
-                        <label class="form-label" for="profileSchoolStart">School Start</label>
-                        <select id="profileSchoolStart" class="form-input"></select>
-                    </div>
-                    <div class="form-row">
-                        <label class="form-label" for="profileSchoolEnd">School End</label>
-                        <select id="profileSchoolEnd" class="form-input"></select>
-                    </div>
-                    <div class="form-row">
-                        <label class="form-label" for="profileMaxDaily">Max Daily Study</label>
-                        <select id="profileMaxDaily" class="form-input"></select>
-                    </div>
-                    <div class="form-row">
-                        <label class="form-label" for="profileSessionDuration">Session Length</label>
-                        <select id="profileSessionDuration" class="form-input"></select>
-                    </div>
-                    <div class="form-row">
-                        <label class="form-label" for="profileBreakDuration">Break Length</label>
-                        <select id="profileBreakDuration" class="form-input"></select>
-                    </div>
-                </div>
-            </div>
-            <div class="modal-actions">
-                <button type="button" class="btn btn-outline" onclick="closePrefsModal()">Cancel</button>
-                <button type="submit" class="btn btn-primary">Save</button>
-            </div>
-        </form>
     </div>
 </div>
 
@@ -295,13 +233,6 @@
 </div>
 
 <script>
-    // Preferences modal functions
-    function openPrefsModal() {
-        loadPrefsSubjectsForProfile();
-        document.getElementById('prefsModal').classList.remove('hidden');
-    }
-    function closePrefsModal() { document.getElementById('prefsModal').classList.add('hidden'); }
-
     /* ── CACHED VALUES ── */
     const profileDataEl = document.getElementById('profileUserData');
     const PROFILE_USER = JSON.parse(profileDataEl?.textContent || '{}');
@@ -562,90 +493,7 @@
             priority_subjects: subjects.map(s => String(s.subjectID)),
             scheduler_onboarded: true
         };
-    }
-
-    // Preferences modal: load subjects and pre-fill
-    async function loadPrefsSubjectsForProfile() {
-        try {
-            const res = await fetch('/api/user/preferences');
-            const data = await res.json();
-            const wrap = document.getElementById('prefsSubjectsProfile');
-            wrap.innerHTML = '';
-            let settings = PROFILE_USER.userSettings || {};
-            if (typeof settings === 'string') {
-                try { settings = JSON.parse(settings || '{}') || {}; } catch { settings = {}; }
-            }
-            const selectedIds = new Set();
-            const selectedColours = {};
-            const hasSavedSubjects = Array.isArray(settings.subjects);
-            if (hasSavedSubjects) {
-                settings.subjects.forEach(item => {
-                    if (typeof item === 'number') {
-                        selectedIds.add(item);
-                    } else if (item && typeof item === 'object') {
-                        selectedIds.add(item.subjectID);
-                        selectedColours[item.subjectID] = item.colourScheme;
-                    }
-                });
-            }
-
-            populateProfileSchedulerPrefs(data.scheduler || {});
-
-            (data.subjects || []).forEach(s => {
-                const id = s.subjectID;
-                const name = s.subjectName;
-                const checked = !hasSavedSubjects ? true : selectedIds.has(id);
-                const colour = selectedColours[id] || s.colourScheme || 'orange';
-                const row = document.createElement('div');
-                row.className = 'prefs-row';
-                row.innerHTML = `
-                    <label class="prefs-row-label">
-                        <input type="checkbox" name="subjectActive" value="${id}" ${checked ? 'checked' : ''}>
-                        <span>${escH(name)}</span>
-                    </label>
-                    <select name="colour-${id}" class="prefs-colour-select">
-                        ${SUBJECT_COLOUR_OPTIONS.map(opt =>
-                            `<option value="${opt.key}" ${opt.key === colour ? 'selected' : ''}>${opt.label}</option>`
-                        ).join('')}
-                    </select>
-                `;
-                wrap.appendChild(row);
-            });
-            // pre-select theme
-            const theme = settings.theme || 'light';
-            const radio = document.querySelectorAll('#prefsFormProfile input[name="theme"]');
-            radio.forEach(r => { if (r.value === theme) r.checked = true; });
-        } catch (e) { console.error('Could not load prefs subjects', e); }
-    }
-
-    document.getElementById('prefsFormProfile')?.addEventListener('submit', async function (e) {
-        e.preventDefault();
-        const form = e.target;
-        const theme = form.querySelector('input[name="theme"]:checked')?.value || 'light';
-        const subjects = Array.from(form.querySelectorAll('input[name="subjectActive"]:checked')).map(input => ({
-            subjectID: Number(input.value),
-            colourScheme: form.querySelector(`select[name="colour-${input.value}"]`)?.value || 'orange'
-        }));
-        const scheduler = collectProfileSchedulerPrefs(subjects);
-        try {
-            const res = await fetch('/api/user/preferences', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ theme, subjects, scheduler })
-            });
-            const data = await res.json().catch(() => ({}));
-            if (res.ok && data.success) {
-                toast('Preferences saved.', 'success');
-                PROFILE_USER.userSettings = { theme, ...scheduler };
-                closePrefsModal();
-                if (theme === 'dark') document.documentElement.setAttribute('data-theme', 'dark');
-                else document.documentElement.removeAttribute('data-theme');
-                loadProfileData();
-            } else {
-                toast(data.error || 'Could not save preferences', 'error');
-            }
-        } catch (err) { toast('Network error while saving preferences', 'error'); }
-    });
+    };
 </script>
 </body>
 </html>

@@ -42,15 +42,16 @@ if (loginForm) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                showPopup("Login Successful", data.message, () => {
-                    window.location.href = "/home";
-                });
+                // Use server-provided redirect so onboarding gate works
+                window.location.href = data.redirect_url || '/home';
             } else {
-                showPopup("Login Failed", data.message);
+                const errEl = document.getElementById('loginError');
+                if (errEl) errEl.textContent = data.message;
+                else showPopup('Login Failed', data.message);
             }
         })
         .catch(() => {
-            showPopup("Error", "Unable to login. Please try again.");
+            showPopup('Error', 'Unable to login. Please try again.');
         });
     });
 }
@@ -651,10 +652,24 @@ function openPrefsModal() {
         if (!modal) return;
 
         modal.classList.remove('hidden');
+        // Reset state before loading
+        prefsState.selected.clear();
+        prefsState.colours   = {};
+        prefsState.techniques = new Set();
+
         loadSignupSubjects().then(() => {
-            prefsState.selected.clear();
-            prefsState.colours = {};
             buildSubjectGrid();
+            // Re-apply pre-selected state to buttons after grid is built
+            prefsState.selected.forEach(key => {
+                const btn = document.querySelector(`[data-key="${key}"]`);
+                if (btn) {
+                    btn.classList.add('selected');
+                    const check = btn.querySelector('.subj-check');
+                    if (check) check.textContent = '✓';
+                }
+            });
+            const next = document.getElementById('nextStepBtn');
+            if (next) next.disabled = prefsState.selected.size === 0;
             setStep(0);
         }).catch(err => {
             console.error('Failed to load subjects for preferences modal:', err);
@@ -664,8 +679,7 @@ function openPrefsModal() {
 }
 
 async function loadSignupSubjects() {
-    // Always use the full hardcoded SUBJECTS list for onboarding
-    // Never use DB subjects here — the user is choosing what they want
+    // Always show full SUBJECTS list for selection
     window.signupSubjects = SUBJECTS.map(s => ({
         subjectKey:   s.key,
         subjectName:  s.label,
@@ -673,15 +687,41 @@ async function loadSignupSubjects() {
     }));
     prefsState.subjects = window.signupSubjects;
 
-    // Still load scheduler prefs if they exist (for returning users redoing onboarding)
+    // Pre-populate existing selections if user already has preferences
     try {
         const res = await fetch('/api/user/preferences');
         const data = await res.json();
+
         if (res.ok && data.scheduler) {
             populateSchedulerPrefs(data.scheduler);
         }
+
+        // Pre-select existing subjects and their colours
+        if (res.ok && Array.isArray(data.subjects) && data.subjects.length > 0) {
+            data.subjects.forEach(existing => {
+                // Match by name against the full SUBJECTS list
+                const match = window.signupSubjects.find(
+                    s => s.subjectName.toLowerCase() === existing.subjectName?.toLowerCase()
+                );
+                const key = match ? match.subjectKey : null;
+                if (key) {
+                    prefsState.selected.add(key);
+                    prefsState.colours[key] = normalizeColour(existing.colourScheme || 'orange');
+                }
+            });
+        }
+
+        // Pre-select existing techniques
+        if (res.ok && Array.isArray(data.scheduler?.study_techniques)) {
+            if (!prefsState.techniques) prefsState.techniques = new Set();
+            data.scheduler.study_techniques.forEach(label => {
+                const match = STUDY_TECHNIQUES.find(t => t.label === label);
+                if (match) prefsState.techniques.add(match.key);
+            });
+        }
+
     } catch (e) {
-        // Ignore — scheduler prefs are optional during onboarding
+        // Ignore — optional pre-population
     }
 
     return window.signupSubjects;
@@ -773,6 +813,14 @@ function buildColourAssignments() {
     }).join('');
 }
 
+function pickColour(subjectKey, colourKey, swatchEl) {
+    prefsState.colours[subjectKey] = colourKey;
+    /* Deactivate all swatches in this row, activate picked one */
+    const row = swatchEl.closest('.colour-row');
+    row.querySelectorAll('.colour-swatch').forEach(s => s.classList.remove('active'));
+    swatchEl.classList.add('active');
+}
+
 function buildTechniquesGrid() {
     const grid = document.getElementById('techniquesGrid');
     if (!grid) return;
@@ -848,10 +896,13 @@ async function savePreferences() {
         const data = await response.json().catch(() => ({}));
 
         if (response.ok && data.success) {
-            // Always redirect to home — works for both onboarding and profile edits
             const path = window.location.pathname.replace(/\/$/, '');
             if (path === '/onboarding' || path === '/signup') {
                 window.location.href = '/home';
+            } else if (path === '/profile') {
+                // Close modal and stay on profile — reload to reflect new subjects
+                closePrefsModal();
+                window.location.reload();
             } else {
                 closePrefsModal();
                 showPopup('Preferences Saved', 'Your scheduler preferences have been saved.');
@@ -1066,8 +1117,25 @@ function skipPrefs() {
     closePrefsModal();
 }
 
+function closePrefsModal() {
+    const modal = document.getElementById('prefsModal');
+    if (modal) modal.classList.add('hidden');
+}
+
 document.addEventListener('DOMContentLoaded', async () => {
-    const path = window.location.pathname.replace(/\/$/, '');
+  // Detect hard reload and log out
+    const navEntry = performance.getEntriesByType('navigation')[0];
+    const isReload = navEntry?.type === 'reload';
+    const isAppPage = isDustyAppPage();
+
+    if (isReload && isAppPage) {
+        // Use sendBeacon so the request completes even as we redirect
+        navigator.sendBeacon('/logout');
+        window.location.replace('/login');
+        return;
+    }
+  
+  const path = window.location.pathname.replace(/\/$/, '');
     if (!isDustyAppPage() || path === '/signup' || sessionStorage.getItem('dusty.skipSchedulerOnboarding') === '1') return;
     try {
         const res = await fetch('/api/user/onboarding-status');
