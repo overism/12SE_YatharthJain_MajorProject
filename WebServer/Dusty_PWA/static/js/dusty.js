@@ -231,7 +231,10 @@ function ensureSidebarDrawer() {
 window.addEventListener('DOMContentLoaded', ensureSidebarDrawer);
 
 (function initDustyStudyTimer() {
-  const STORAGE_KEY = 'dusty.studyTimer.state';
+  // Read the user-id injected by Flask via the <meta name="dusty-uid"> tag.
+  // This namespaces the localStorage key so each logged-in user has an isolated timer.
+  const _dustyUID = document.querySelector('meta[name="dusty-uid"]')?.content || '0';
+  const STORAGE_KEY = `dusty.studyTimer.state.u${_dustyUID}`;
   const AUTOSAVE_SECONDS = 60;
   const DEFAULT_STATE = {
     isRunning: false,

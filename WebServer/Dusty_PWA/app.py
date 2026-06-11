@@ -24,6 +24,11 @@ GOOGLE_SCOPES = ['https://www.googleapis.com/auth/calendar']
 GOOGLE_CLIENT_SECRET_FILE = os.path.join(basedir, 'static', 'secrets', 'client_secret_2_718545971467-nk6uf6oai3gtf7lit9cac1gnkpur55a7.apps.googleusercontent.com.json')
 GOOGLE_CALENDAR_ID = 'primary'
 VALID_SUBJECT_COLOURS = {'orange', 'blue', 'green', 'red', 'purple', 'yellow', 'brown', 'amber', 'teal', 'pink'}
+USER_UPLOADS_DIR = os.path.join(basedir, 'data', 'user_uploads')
+ALLOWED_UPLOAD_EXTENSIONS = {
+    'pdf', 'docx', 'doc', 'pptx', 'ppt',
+    'txt', 'md', 'png', 'jpg', 'jpeg',
+}
 
 app = Flask(
     __name__,
@@ -32,6 +37,10 @@ app = Flask(
 )
 app.secret_key = os.getenv('SECRET_KEY', 'dusty-dev-secret-key-change-this')
 CORS(app)
+
+@app.context_processor
+def inject_globals():
+    return {'current_user_id': session.get('user_id', 0)}
 
 def login_required(f):
     @wraps(f)
@@ -1294,8 +1303,14 @@ def chat():
         'SELECT userName, userEmail, userPfp FROM users WHERE userID = ?',
         (user_id,)
     ).fetchone()
+
+    subjects = conn.execute(
+        'SELECT subjectID, subjectName FROM subjects WHERE userID = ? AND isActive = 1 ORDER BY sortOrder, subjectID',
+        (user_id,)
+    ).fetchall()
     conn.close()
-    return render_template('chat.html', user=user)
+
+    return render_template('chat.html', user=user, subjects=subjects)
 
 @app.route('/flashcards')
 @login_required
@@ -3113,33 +3128,36 @@ def get_progress():
 @app.route('/api/resources')
 @login_required
 def get_resources():
+    """Return the resource library tree, including the user's own uploads."""
+    user_id = session.get('user_id')
     try:
         libraries = []
         from RAG.paths import SUBJECT_RESOURCE_DIRS, CHAT_DATABASE_SUBJECT_DIRS
 
+        # ── Syllabus resource library ──
         resource_library = {
             'title': 'Resource Library',
             'source_key': 'resources',
-            'subjects': []
+            'subjects': [],
         }
-
         for subject_name, subject_dir in SUBJECT_RESOURCE_DIRS.items():
             if os.path.isdir(subject_dir):
                 resource_library['subjects'].append({
                     'name': subject_name,
-                    'tree': _build_directory_tree(subject_dir)
+                    'tree': _build_directory_tree(subject_dir),
                 })
 
+        # ── Chat-DB library ──
         chat_db_library = {
             'title': 'Chat Database',
             'source_key': 'chat_db',
-            'subjects': []
+            'subjects': [],
         }
         for subject_name, subject_dir in CHAT_DATABASE_SUBJECT_DIRS.items():
             if os.path.isdir(subject_dir):
                 chat_db_library['subjects'].append({
                     'name': subject_name,
-                    'tree': _build_directory_tree(subject_dir)
+                    'tree': _build_directory_tree(subject_dir),
                 })
 
         if resource_library['subjects']:
@@ -3147,7 +3165,31 @@ def get_resources():
         if chat_db_library['subjects']:
             libraries.append(chat_db_library)
 
+        # ── User uploads library ──
+        user_upload_dir = os.path.join(USER_UPLOADS_DIR, str(user_id))
+        if os.path.isdir(user_upload_dir):
+            upload_files = []
+            for filename in sorted(os.listdir(user_upload_dir)):
+                if filename.startswith('.'):
+                    continue
+                filepath = os.path.join(user_upload_dir, filename)
+                if os.path.isfile(filepath):
+                    upload_files.append({
+                        'name':      filename,
+                        'type':      'file',
+                        'path':      filename,
+                        'extension': os.path.splitext(filename)[1].lower(),
+                    })
+
+            if upload_files:
+                libraries.append({
+                    'title':      'My Uploads',
+                    'source_key': 'user_uploads',
+                    'subjects':   [{'name': 'My Files', 'tree': upload_files}],
+                })
+
         return jsonify({'libraries': libraries})
+
     except Exception as e:
         print(f'[GET_RESOURCES] Error: {e}')
         return jsonify({'error': 'Could not list resources'}), 500
@@ -3156,27 +3198,123 @@ def get_resources():
 @app.route('/resource')
 @login_required
 def view_resource():
+    """Serve a resource file to the browser."""
     source = request.args.get('source')
-    path = request.args.get('path')
+    path   = request.args.get('path')
     if not source or not path:
         abort(400)
 
     from RAG.paths import SUBJECT_RESOURCE_DIRS, CHAT_DATABASE_SUBJECT_DIRS
 
+    normalized_path = _normalize_relative_path(path)
+    if not normalized_path:
+        abort(400)
+
     if source == 'resources':
         roots = SUBJECT_RESOURCE_DIRS.values()
     elif source == 'chat_db':
         roots = CHAT_DATABASE_SUBJECT_DIRS.values()
+    elif source == 'user_uploads':
+        # Handled separately — user uploads are served through a dedicated route.
+        abort(400)
     else:
         abort(400)
 
-    normalized_path = _normalize_relative_path(path)
     for root_dir in roots:
         resolved = _safe_join(root_dir, normalized_path)
         if resolved and os.path.isfile(resolved):
             return send_from_directory(root_dir, normalized_path)
 
     abort(404)
+
+
+@app.route('/resource/upload/<path:filename>')
+@login_required
+def view_user_upload(filename):
+    """Serve a user-uploaded file securely."""
+    user_id    = session.get('user_id')
+    user_dir   = os.path.join(USER_UPLOADS_DIR, str(user_id))
+    safe_name  = secure_filename(filename)
+    if not safe_name:
+        abort(400)
+    resolved = _safe_join(user_dir, safe_name)
+    if not resolved or not os.path.isfile(resolved):
+        abort(404)
+    return send_from_directory(user_dir, safe_name)
+
+
+@app.route('/api/resources/upload', methods=['POST'])
+@login_required
+def upload_resource():
+    """Upload a resource file to the user's secure uploads folder."""
+    user_id = session.get('user_id')
+    file    = request.files.get('file')
+
+    if not file or not file.filename:
+        return jsonify({'error': 'No file provided'}), 400
+
+    ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
+    if ext not in ALLOWED_UPLOAD_EXTENSIONS:
+        return jsonify({'error': f'File type .{ext} is not allowed'}), 400
+
+    user_dir = os.path.join(USER_UPLOADS_DIR, str(user_id))
+    os.makedirs(user_dir, exist_ok=True)
+
+    base_name  = secure_filename(file.filename)
+    name, dext = os.path.splitext(base_name)
+    timestamp  = int(datetime.now().timestamp())
+    safe_name  = f"{name}_{timestamp}{dext}"
+    filepath   = os.path.join(user_dir, safe_name)
+
+    file.save(filepath)
+
+    return jsonify({
+        'success':       True,
+        'filename':      safe_name,
+        'original_name': base_name,
+        'size':          os.path.getsize(filepath),
+    }), 201
+
+
+@app.route('/api/resources/user-uploads', methods=['GET'])
+@login_required
+def get_user_uploads():
+    """List all files the current user has uploaded."""
+    user_id  = session.get('user_id')
+    user_dir = os.path.join(USER_UPLOADS_DIR, str(user_id))
+
+    if not os.path.isdir(user_dir):
+        return jsonify({'files': []})
+
+    files = []
+    for filename in sorted(os.listdir(user_dir)):
+        if filename.startswith('.'):
+            continue
+        filepath = os.path.join(user_dir, filename)
+        if os.path.isfile(filepath):
+            files.append({
+                'name':      filename,
+                'size':      os.path.getsize(filepath),
+                'extension': os.path.splitext(filename)[1].lower(),
+            })
+
+    return jsonify({'files': files})
+
+
+@app.route('/api/resources/user-uploads/<path:filename>', methods=['DELETE'])
+@login_required
+def delete_user_upload(filename):
+    """Permanently delete a user-uploaded file."""
+    user_id   = session.get('user_id')
+    user_dir  = os.path.join(USER_UPLOADS_DIR, str(user_id))
+    safe_name = secure_filename(filename)
+    resolved  = _safe_join(user_dir, safe_name)
+
+    if not resolved or not os.path.isfile(resolved):
+        return jsonify({'error': 'File not found'}), 404
+
+    os.remove(resolved)
+    return jsonify({'success': True})
 
 
 @app.route('/api/flashcards', methods=['POST'])
@@ -3666,41 +3804,79 @@ def api_chat():
             build_essay_marking_prompt,
             build_question_generation_prompt,
         )
+        from RAG.ingestion import extract_text, clean_text
 
-        data       = request.get_json() or {}
-        question   = (data.get('question') or '').strip()
-        subject    = (data.get('subject')  or 'General').strip()
-        mode       = (data.get('mode')     or 'tutor').strip()
-        module     = (data.get('module')   or 'General').strip()
-        difficulty = (data.get('difficulty') or 'medium').strip()
+        # ── Accept both JSON and multipart/form-data ──
+        if request.content_type and 'multipart' in request.content_type:
+            question   = (request.form.get('question')   or '').strip()
+            subject    = (request.form.get('subject')    or 'General').strip()
+            mode       = (request.form.get('mode')       or 'tutor').strip()
+            module     = (request.form.get('module')     or 'General').strip()
+            difficulty = (request.form.get('difficulty') or 'medium').strip()
+            uploaded   = request.files.get('file')
+        else:
+            data       = request.get_json() or {}
+            question   = (data.get('question')   or '').strip()
+            subject    = (data.get('subject')    or 'General').strip()
+            mode       = (data.get('mode')       or 'tutor').strip()
+            module     = (data.get('module')     or 'General').strip()
+            difficulty = (data.get('difficulty') or 'medium').strip()
+            uploaded   = None
 
-        if not question:
-            return jsonify({"error": "Please type a question first."}), 400
+        if not question and not uploaded:
+            return jsonify({'error': 'Please type a question or attach a file.'}), 400
 
-        # ── Retrieval ──
+        # ── Save and extract uploaded file text ──
+        file_context = ''
+        if uploaded and uploaded.filename:
+            ext = uploaded.filename.rsplit('.', 1)[-1].lower() if '.' in uploaded.filename else ''
+            if ext in ALLOWED_UPLOAD_EXTENSIONS:
+                user_dir = os.path.join(USER_UPLOADS_DIR, str(session.get('user_id')))
+                os.makedirs(user_dir, exist_ok=True)
+                base      = secure_filename(uploaded.filename)
+                name, dxt = os.path.splitext(base)
+                ts        = int(datetime.now().timestamp())
+                safe_name = f"{name}_{ts}{dxt}"
+                filepath  = os.path.join(user_dir, safe_name)
+                uploaded.save(filepath)
+
+                try:
+                    raw  = extract_text(filepath)
+                    text = clean_text(raw)[:4000]
+                    if text:
+                        file_context = (
+                            f"\n\n[ATTACHED FILE: {base}]\n"
+                            f"{text}\n"
+                            "[END OF ATTACHED FILE]\n"
+                        )
+                except Exception as fe:
+                    print(f'[CHAT_UPLOAD] Text extraction failed: {fe}')
+
+        # ── RAG retrieval ──
         chunks, context, retrieval_error = retrieve_hsc_context(
-            question, subject, n_results=5
+            question or (uploaded.filename if uploaded else ''), subject, n_results=5
         )
+        if file_context:
+            context = file_context + '\n' + context
 
         # ── Chat history from DB ──
-        history_text = ""
+        history_text = ''
         try:
             conn_hist = get_db_connection()
-            recent_messages = conn_hist.execute('''
+            recent    = conn_hist.execute('''
                 SELECT role, content FROM chat_messages
                 WHERE sessionID = ?
                 ORDER BY createdAt DESC LIMIT 8
             ''', (session.get('active_chat_session'),)).fetchall()
             conn_hist.close()
-
-            recent_messages = list(reversed(recent_messages))
-            pairs = []
-            for i in range(0, len(recent_messages) - 1, 2):
-                if recent_messages[i]['role'] == 'user' and recent_messages[i+1]['role'] == 'assistant':
-                    pairs.append(f"Student: {recent_messages[i]['content']}\nTutor: {recent_messages[i+1]['content']}")
-            history_text = "\n".join(pairs)
+            recent = list(reversed(recent))
+            pairs  = []
+            for i in range(0, len(recent) - 1, 2):
+                if recent[i]['role'] == 'user' and recent[i+1]['role'] == 'assistant':
+                    pairs.append(f"Student: {recent[i]['content']}\nTutor: {recent[i+1]['content']}")
+            history_text = '\n'.join(pairs)
         except Exception:
-            history_text = ""
+            history_text = ''
 
         # ── Build prompt ──
         if mode == 'feedback':
@@ -3714,7 +3890,7 @@ def api_chat():
         # ── Call Gemini ──
         gemini_response = ask_gemini(prompt)
 
-        # ── Save to database ──
+        # ── Persist to DB ──
         session_title = 'Untitled Chat'
         try:
             user_id    = session.get('user_id')
@@ -3722,82 +3898,74 @@ def api_chat():
 
             if session_id:
                 conn = get_db_connection()
-                existing_session = conn.execute(
-                    'SELECT sessionID FROM chat_sessions WHERE sessionID = ? AND userID = ?',
+                exists = conn.execute(
+                    'SELECT sessionID FROM chat_sessions WHERE sessionID=? AND userID=?',
                     (session_id, user_id)
                 ).fetchone()
                 conn.close()
-                if not existing_session:
+                if not exists:
                     session_id = None
                     session.pop('active_chat_session', None)
 
             if not session_id:
                 conn = get_db_connection()
-                cursor = conn.cursor()
-                cursor.execute('''
+                cur  = conn.cursor()
+                cur.execute('''
                     INSERT INTO chat_sessions (userID, title, subject, module, createdAt, updatedAt)
                     VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
                 ''', (user_id, make_chat_title(question), subject, module))
                 conn.commit()
-                session_id = cursor.lastrowid
+                session_id = cur.lastrowid
                 session['active_chat_session'] = session_id
                 conn.close()
 
             conn = get_db_connection()
-            cursor = conn.cursor()
-
-            # Save user message
-            cursor.execute('''
+            cur  = conn.cursor()
+            cur.execute('''
                 INSERT INTO chat_messages (sessionID, userID, role, mode, content, createdAt)
                 VALUES (?, ?, 'user', ?, ?, CURRENT_TIMESTAMP)
             ''', (session_id, user_id, mode, question))
-
-            # Save assistant response
-            cursor.execute('''
+            cur.execute('''
                 INSERT INTO chat_messages (sessionID, userID, role, mode, content, sources, createdAt)
                 VALUES (?, ?, 'assistant', ?, ?, ?, CURRENT_TIMESTAMP)
             ''', (session_id, user_id, mode, gemini_response, json.dumps(chunks)))
 
-            # Update session metadata
-            current_session = cursor.execute(
-                'SELECT title, messageCount FROM chat_sessions WHERE sessionID = ? AND userID = ?',
+            cur_sess = cur.execute(
+                'SELECT title, messageCount FROM chat_sessions WHERE sessionID=? AND userID=?',
                 (session_id, user_id)
             ).fetchone()
-            session_title = current_session['title'] if current_session else make_chat_title(question)
-            if current_session and current_session['messageCount'] in (0, None):
+            session_title = cur_sess['title'] if cur_sess else make_chat_title(question)
+            if cur_sess and cur_sess['messageCount'] in (0, None):
                 session_title = make_chat_title(question)
 
-            cursor.execute('''
+            cur.execute('''
                 UPDATE chat_sessions
-                SET title = ?,
-                    subject = ?,
-                    module = ?,
-                    messageCount = (SELECT COUNT(*) FROM chat_messages WHERE sessionID = ?),
-                    updatedAt = CURRENT_TIMESTAMP
-                WHERE sessionID = ?
+                SET title=?, subject=?, module=?,
+                    messageCount=(SELECT COUNT(*) FROM chat_messages WHERE sessionID=?),
+                    updatedAt=CURRENT_TIMESTAMP
+                WHERE sessionID=?
             ''', (session_title, subject, module, session_id, session_id))
             conn.commit()
             conn.close()
-
-        except Exception as conn_exc:
-            print(f"[CHAT_DB_SAVE] {conn_exc}")
+        except Exception as db_exc:
+            print(f'[CHAT_DB_SAVE] {db_exc}')
 
         return jsonify({
-            "response":        gemini_response,
-            "sources":         build_source_payload(chunks),
-            "mode":            mode,
-            "retrieval_error": retrieval_error,
-            "sessionID":       session.get('active_chat_session'),
-            "title":           session_title,
+            'response':        gemini_response,
+            'sources':         build_source_payload(chunks),
+            'mode':            mode,
+            'retrieval_error': retrieval_error,
+            'sessionID':       session.get('active_chat_session'),
+            'title':           session_title,
         })
 
     except RuntimeError as exc:
-        print(f"[API_CHAT] RuntimeError: {exc}")
-        return jsonify({"error": str(exc)}), 500
+        print(f'[API_CHAT] RuntimeError: {exc}')
+        return jsonify({'error': str(exc)}), 500
     except Exception as exc:
-        print(f"[API_CHAT] Unexpected error: {exc}")
+        print(f'[API_CHAT] Unexpected: {exc}')
         traceback.print_exc()
-        return jsonify({"error": "An unexpected error occurred. Please try again."}), 500
+        return jsonify({'error': 'An unexpected error occurred. Please try again.'}), 500
 
 
 # ── /api/quiz/generate ────────────────────────────────────────────
@@ -3854,6 +4022,46 @@ def api_quiz_generate():
             {k: v for k, v in q.items() if k not in {'answer', 'marking_guidance'}}
             for q in quiz['questions']
         ]
+
+        # Store quiz in database for persistence (so it appears in chat history)
+        try:
+            user_id = session.get('user_id')
+            session_id = session.get('active_chat_session')
+
+            # If no active session, create one
+            if not session_id:
+                conn_new = get_db_connection()
+                cur_new = conn_new.cursor()
+                cur_new.execute('''
+                    INSERT INTO chat_sessions (userID, title, subject, module, createdAt, updatedAt)
+                    VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+                ''', (user_id, make_chat_title(f"Quiz: {module}"), subject, module))
+                conn_new.commit()
+                session_id = cur_new.lastrowid
+                session['active_chat_session'] = session_id
+                conn_new.close()
+
+            # Store the quiz as a message (JSON encoded)
+            if session_id:
+                conn_msg = get_db_connection()
+                cur_msg = conn_msg.cursor()
+                quiz_content = json.dumps(public_quiz)
+                cur_msg.execute('''
+                    INSERT INTO chat_messages (sessionID, userID, role, mode, content, createdAt)
+                    VALUES (?, ?, 'assistant', 'quiz', ?, CURRENT_TIMESTAMP)
+                ''', (session_id, user_id, quiz_content))
+
+                # Update session message count
+                cur_msg.execute('''
+                    UPDATE chat_sessions
+                    SET messageCount=(SELECT COUNT(*) FROM chat_messages WHERE sessionID=?),
+                        updatedAt=CURRENT_TIMESTAMP
+                    WHERE sessionID=?
+                ''', (session_id, session_id))
+                conn_msg.commit()
+                conn_msg.close()
+        except Exception as db_exc:
+            print(f"[QUIZ_DB_SAVE] {db_exc}")
 
         return jsonify({
             "quiz":            public_quiz,
