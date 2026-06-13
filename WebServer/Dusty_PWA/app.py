@@ -432,6 +432,20 @@ def api_get_subjects():
         print('[API /api/subjects] Error:', e)
         return jsonify({'error': 'Could not load subjects'}), 500
 
+@app.route('/api/syllabus/topics', methods=['GET'])
+@login_required
+def api_syllabus_topics():
+    from RAG.syllabus_topics import SYLLABUS_TOPICS, get_subjects
+
+    subject = request.args.get('subject')
+    if subject and subject in SYLLABUS_TOPICS:
+        return jsonify({'subject': subject, 'modules': SYLLABUS_TOPICS[subject]})
+
+    return jsonify({
+        'subjects': get_subjects(),
+        'modules': SYLLABUS_TOPICS['General'],
+    })
+
 @app.route('/debug_session')
 def debug_session():
     print("DEBUG SESSION:", dict(session))
@@ -3791,6 +3805,28 @@ def make_chat_title(question: str) -> str:
     title = title[:48].rstrip(' ,.;:')
     return title or 'Untitled Chat'
 
+def _quiz_options_valid(quiz: dict) -> bool:
+    """Reject quizzes where any multiple_choice question has duplicate options."""
+    for q in quiz.get('questions', []):
+        if q.get('type') != 'multiple_choice':
+            continue
+        opts = [str(o).strip().lower() for o in (q.get('options') or [])]
+        if len(opts) < 2 or len(set(opts)) != len(opts):
+            return False
+    return True
+
+
+def _fix_duplicate_options(quiz: dict) -> dict:
+    """Last-resort fallback: convert any MC question with duplicate options to short_answer."""
+    for q in quiz.get('questions', []):
+        if q.get('type') != 'multiple_choice':
+            continue
+        opts = [str(o).strip().lower() for o in (q.get('options') or [])]
+        if len(opts) < 2 or len(set(opts)) != len(opts):
+            q['type'] = 'short_answer'
+            q['options'] = []
+    return quiz
+
 
 # ── /api/chat ─────────────────────────────────────────────────────
 
@@ -3971,6 +4007,7 @@ def api_chat():
 # ── /api/quiz/generate ────────────────────────────────────────────
 
 @app.route('/api/quiz/generate', methods=['POST'])
+@login_required
 def api_quiz_generate():
     try:
         from Chat.gemini_client  import ask_gemini_json
@@ -4002,6 +4039,22 @@ def api_quiz_generate():
             prompt_retry = prompt + "\n\nCRITICAL: Your entire response must be only the JSON object. No text before or after it."
             quiz = ask_gemini_json(prompt_retry, temperature=0.1)
 
+        # Guard against duplicate multiple-choice options
+        if isinstance(quiz, dict) and quiz.get('questions') and not _quiz_options_valid(quiz):
+            print("[QUIZ_GENERATE] Duplicate MC options detected — retrying once")
+            prompt_dedup = prompt + (
+                "\n\nIMPORTANT FIX: Your previous attempt produced multiple_choice "
+                "questions with duplicate or near-duplicate options. Regenerate the "
+                "ENTIRE quiz, ensuring every multiple_choice question has four "
+                "distinct, non-overlapping options."
+            )
+            retry_quiz = ask_gemini_json(prompt_dedup, temperature=0.2)
+            if isinstance(retry_quiz, dict) and retry_quiz.get('questions'):
+                quiz = retry_quiz
+
+        if isinstance(quiz, dict) and quiz.get('questions') and not _quiz_options_valid(quiz):
+            quiz = _fix_duplicate_options(quiz)
+
         # Normalise questions
         questions = quiz.get('questions', [])
         for i, q in enumerate(questions, 1):
@@ -4024,6 +4077,7 @@ def api_quiz_generate():
         ]
 
         # Store quiz in database for persistence (so it appears in chat history)
+        quiz_message_id = None
         try:
             user_id = session.get('user_id')
             session_id = session.get('active_chat_session')
@@ -4050,6 +4104,7 @@ def api_quiz_generate():
                     INSERT INTO chat_messages (sessionID, userID, role, mode, content, createdAt)
                     VALUES (?, ?, 'assistant', 'quiz', ?, CURRENT_TIMESTAMP)
                 ''', (session_id, user_id, quiz_content))
+                quiz_message_id = cur_msg.lastrowid
 
                 # Update session message count
                 cur_msg.execute('''
@@ -4067,6 +4122,7 @@ def api_quiz_generate():
             "quiz":            public_quiz,
             "sources":         build_source_payload(chunks),
             "retrieval_error": retrieval_error,
+            "quizMessageID":   quiz_message_id,
         })
 
     except RuntimeError as exc:
@@ -4081,6 +4137,7 @@ def api_quiz_generate():
 # ── /api/quiz/mark ────────────────────────────────────────────────
 
 @app.route('/api/quiz/mark', methods=['POST'])
+@login_required
 def api_quiz_mark():
     try:
         from Chat.gemini_client  import ask_gemini_json
@@ -4090,6 +4147,7 @@ def api_quiz_mark():
         # Prefer the server-stored quiz (has answers) over the browser copy
         quiz    = session.get('active_quiz') or data.get('quiz')
         answers = data.get('answers') or {}
+        quiz_message_id = data.get('quizMessageID')
 
         if not quiz:
             return jsonify({"error": "No active quiz found. Please generate a new quiz."}), 400
@@ -4139,6 +4197,37 @@ def api_quiz_mark():
             print(f"[DEBUG] Marking score/total not numeric. Got: score={result.get('score')}, total={result.get('total')}")
             result["score"] = 0
             result["total"] = 0
+
+        # ── Persist answers + feedback so the quiz survives a chat reload ──
+        try:
+            if quiz_message_id:
+                user_id = session.get('user_id')
+                conn_q = get_db_connection()
+                owner = conn_q.execute(
+                    'SELECT userID, sessionID FROM chat_messages WHERE messageID = ?',
+                    (quiz_message_id,)
+                ).fetchone()
+
+                if owner and owner['userID'] == user_id:
+                    payload = json.dumps({
+                        'quiz':    quiz,
+                        'answers': answers,
+                        'result':  result,
+                    })
+                    conn_q.execute('''
+                        UPDATE chat_messages
+                        SET mode = 'quiz_result', content = ?
+                        WHERE messageID = ?
+                    ''', (payload, quiz_message_id))
+                    conn_q.execute('''
+                        UPDATE chat_sessions
+                        SET updatedAt = CURRENT_TIMESTAMP
+                        WHERE sessionID = ?
+                    ''', (owner['sessionID'],))
+                    conn_q.commit()
+                conn_q.close()
+        except Exception as persist_exc:
+            print(f"[QUIZ_MARK_PERSIST] {persist_exc}")
 
         return jsonify({
             "result":          result,

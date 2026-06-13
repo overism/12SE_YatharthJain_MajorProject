@@ -52,37 +52,65 @@
 
 /* ── BTN SYSTEM ── */
 .btn {
-    padding: 9px 16px; border: none; border-radius: 10px;
-    cursor: pointer; font-weight: 600; font-family: inherit; font-size: 13.5px;
-    transition: all 0.22s cubic-bezier(0.4,0,0.2,1);
+    padding: 12px 24px; border: none; border-radius: 12px;
+    cursor: pointer; font-weight: 600; font-family: inherit;
+    transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
     position: relative; overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    box-shadow: 0 4px 15px rgba(0,0,0,0.1);
     display: inline-flex; align-items: center; gap: 7px;
-    text-decoration: none; min-height: 40px; white-space: nowrap;
+    text-decoration: none; min-height: 44px; white-space: nowrap;
 }
 .btn svg { width: 15px; height: 15px; flex-shrink: 0; }
 .btn::before { content:''; position:absolute; top:0; left:-100%; width:100%; height:100%; background:linear-gradient(90deg,transparent,rgba(255,255,255,.18),transparent); transition:left .45s; }
 .btn:hover::before { left:100%; }
 .btn-ghost { background:rgba(255,255,255,.08); color:rgba(255,255,255,.85); border:1px solid rgba(255,255,255,.14); }
-.btn-ghost:hover { transform:translateY(-2px); box-shadow:2px 5px 15px #f5591ce0; color:#f5761c; background:rgba(245,118,28,.15); border-color:rgba(245,118,28,.3); }
-.btn-secondary { background:#db6e07; color:white; }
-.btn-secondary:hover { transform:translateY(-2px); box-shadow:2px 5px 15px #f5591ce0; background:white; color:#db6e07; }
+.btn-ghost:hover { transform:translateY(-2px); box-shadow:2px 5px 15px #f5591ce0; }
+.btn-secondary{ background:#db6e07; color:#fff; }
+.btn-secondary:hover{ transform:translateY(-2px); box-shadow:0 5px 16px rgba(245,89,28,.4); background:#fff; color:#db6e07; }
 .btn-primary { background:linear-gradient(135deg,#f5761c,#ee4319); color:white; }
 .btn-primary:hover { transform:translateY(-2px); box-shadow:2px 5px 15px #f5591ce0; }
 
 /* Sidebar nav */
 .sidebar .btn {
-    min-height: 70px; padding: 0 18px; border-radius: 15px;
-    border: 1px solid transparent; font-weight: 700;
-    color: #8b8b8b; background-color: transparent; width: 100%;
-    transition: transform .22s ease, border-color .22s ease, background-color .22s ease, color .22s ease, box-shadow .3s ease;
-    font-size: 14px;
+    min-height: 70px;
+    padding: 0 18px;
+    border-radius: 15px;
+    border: 1px solid transparent;
+    font-weight: 700;
+    color: #8b8b8b;
+    background-color: transparent;
+    width: 100%;
+    transition: transform 0.22s ease, border-color 0.22s ease, background-color 0.22s ease, color 0.22s ease, box-shadow 0.3s ease;
 }
-.sidebar .btn:hover { box-shadow: 2px 5px 15px #f5591ce0; }
-.btn.btn-active { color: #f79f3d; background-color: rgba(242,155,60,.35); border-color: rgba(241,159,92,.22); }
-.btn.btn-active:hover { color: #f79f3d; background: rgba(233,144,27,.60); box-shadow: 2px 5px 15px #f5591ce0; }
-.btn-ghost:not(.sidebar .btn) { background:rgba(255,255,255,.04); border-color:rgba(255,255,255,.14); color:rgba(255,255,255,.8); }
-.btn-ghost:not(.sidebar .btn):hover { color:#fc941d; background:rgba(235,148,35,.35); border-color:rgba(241,159,92,.22); box-shadow:2px 5px 15px #f5591ce0; }
+
+.sidebar .btn:hover {
+    box-shadow: 2px 5px 15px #f5591ce0;
+}
+
+.btn.btn-active {
+    color: #f79f3d;
+    background-color: rgba(242, 155, 60, 0.35);
+    border-color: rgba(241, 159, 92, 0.22);
+}
+    
+.btn.btn-active:hover {
+    color: #f79f3d;
+    background: rgba(233, 144, 27, 0.60);
+    box-shadow: 2px 5px 15px #f5591ce0;
+}
+
+.btn-ghost {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.14);
+    color: var(--landing-text);
+}
+
+.sidebar .btn-ghost:hover {
+    color: #fc941d;
+    background: rgba(235, 148, 35, 0.35);
+    border-color: rgba(241, 159, 92, 0.22);
+    box-shadow: 2px 5px 15px #f5591ce0;
+}
 
 /* ── STATUS TOAST ── */
 .status {
@@ -323,14 +351,14 @@
 .uploads-heading {
     display: flex; align-items: center; justify-content: space-between; gap: 12px;
     margin-bottom: 18px; padding-bottom: 12px;
-    border-bottom: 3px solid #7c3aed;
+    border-bottom: 3px solid #f5761c;
 }
 .uploads-heading h2 { font-size: 20px; font-weight: 700; color: #22140b; font-family:'Cooper BT',Arial,serif; margin: 0; }
 .uploads-badge {
     font-size: 11px; font-weight: 700; text-transform: uppercase;
     letter-spacing: .6px; padding: 3px 10px; border-radius: 20px;
-    background: rgba(124,58,237,.1); color: #7c3aed;
-    border: 1px solid rgba(124,58,237,.2);
+    background: rgba(245,118,28,.1); color: #c85010; border: 1px solid rgba(245,118,28,.2);
+    border: 1px solid rgba(237, 139, 58, 0.2);
 }
 
 .upload-file-card {
@@ -390,7 +418,7 @@
 
 /* Dropzone */
 .upload-dropzone {
-    margin: 20px 24px 0;
+    margin: 20px 24px 20px;
     border: 2px dashed rgba(245,118,28,.35); border-radius: 14px;
     padding: 32px 20px; text-align: center;
     cursor: pointer; transition: all .2s ease;

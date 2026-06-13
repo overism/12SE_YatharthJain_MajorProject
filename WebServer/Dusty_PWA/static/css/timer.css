@@ -567,6 +567,65 @@
     border-color: #d63a16;
 }
 
+.btn {
+    padding: 9px 18px; border: none; border-radius: 12px;
+    cursor: pointer; font-weight: 600; font-family: inherit;
+    transition: all .3s cubic-bezier(.4,0,.2,1);
+    position: relative; overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0,0,0,.1);
+    display: inline-flex; align-items: center; gap: 6px;
+    text-decoration: none;
+}
+.btn::before { content:''; position:absolute; top:0; left:-100%; width:100%; height:100%; background:linear-gradient(90deg,transparent,rgba(255,255,255,.2),transparent); transition:left .5s; }
+.btn:hover::before { left:100%; }
+.btn-primary  { background:linear-gradient(135deg,#f5761c,#ee4319); color:#fff; }
+.btn-primary:hover  { transform:translateY(-2px); box-shadow:2px 5px 15px #f5591ce0; }
+.btn-secondary{ background:#db6e07; color:#fff; }
+.btn-secondary:hover{ transform:translateY(-2px); box-shadow:2px 5px 15px #f5591ce0; background:#fff; color:#db6e07; }
+.btn-ghost { background:rgba(255,255,255,.08); color:rgba(255,255,255,.85); border:1px solid rgba(255,255,255,.14); }
+.btn-ghost:hover { transform:translateY(-2px); box-shadow:2px 5px 15px #f5591ce0; }
+
+.sidebar .btn {
+    min-height: 70px;
+    padding: 0 18px;
+    border-radius: 15px;
+    border: 1px solid transparent;
+    font-weight: 700;
+    color: #8b8b8b;
+    background-color: transparent;
+    width: 100%;
+    transition: transform 0.22s ease, border-color 0.22s ease, background-color 0.22s ease, color 0.22s ease, box-shadow 0.3s ease;
+}
+
+.sidebar .btn:hover {
+    box-shadow: 2px 5px 15px #f5591ce0;
+}
+
+.btn.btn-active {
+    color: #f79f3d;
+    background-color: rgba(242, 155, 60, 0.35);
+    border-color: rgba(241, 159, 92, 0.22);
+}
+
+.btn.btn-active:hover {
+    color: #f79f3d;
+    background: rgba(233, 144, 27, 0.60);
+    box-shadow: 2px 5px 15px #f5591ce0;
+}
+
+.btn-ghost {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.14);
+    color: var(--landing-text);
+}
+
+.btn-ghost:hover {
+    color: #fc941d;
+    background: rgba(235, 148, 35, 0.35);
+    border-color: rgba(241, 159, 92, 0.22);
+    box-shadow: 2px 5px 15px #f5591ce0;
+}
+
 /* Session Complete Modal */
 .session-complete .modal-header h2 {
     -webkit-text-fill-color: unset;

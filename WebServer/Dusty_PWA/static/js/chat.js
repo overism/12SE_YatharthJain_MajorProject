@@ -18,22 +18,8 @@ const Chat = {
 const EL = {};
 let attachedFile = null;
 
-const HINTS = {
-    tutor:    'Tutor mode — scaffolded HSC guidance',
-    feedback: 'Feedback mode — band estimate and specific improvements',
-    generate: 'Question mode — exam-style question with marking guidelines',
-    quiz:     'Quiz mode — generates an interactive quiz in the chat',
-};
-
-const PLACEHOLDERS = {
-    tutor:    'Ask Dusty about any HSC topic, concept, or technique…',
-    feedback: 'Paste your essay or response here for band feedback…',
-    generate: 'Enter a topic or module to generate a practice question…',
-    quiz:     'Describe a focus topic, or just click Send to generate a quiz…',
-};
-
 // ── INIT ─────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     const userDataEl = document.getElementById('chatUserData');
     try { Chat.user = JSON.parse(userDataEl?.textContent || '{}') || {}; } catch { Chat.user = {}; }
 
@@ -41,32 +27,30 @@ document.addEventListener('DOMContentLoaded', () => {
     EL.input       = document.getElementById('questionInput');
     EL.messages    = document.getElementById('messages');
     EL.toast       = document.getElementById('statusToast');
-    EL.subject     = document.getElementById('subjectSelect');
-    EL.module      = document.getElementById('moduleInput');
-    EL.difficulty  = document.getElementById('difficultySelect');
-    EL.qCount      = document.getElementById('questionCount');
     EL.sendBtn     = document.getElementById('sendBtn');
     EL.sendLabel   = document.getElementById('sendLabel');
     EL.hint        = document.getElementById('composerHint');
     EL.kbStatus    = document.getElementById('kbStatus');
     EL.kbText      = document.getElementById('kbStatusText');
-    EL.qCountGroup = document.getElementById('quizCountGroup');
     EL.chatHistory = document.getElementById('chatHistoryList');
     EL.newChatBtn  = document.getElementById('newChatBtn');
     EL.attachBtn   = document.getElementById('attachBtn');
     EL.fileInput   = document.getElementById('fileInput');
     EL.filePreview = document.getElementById('filePreview');
+    EL.modeBtn      = document.getElementById('modeBtn');
+    EL.modeBtnLabel = document.getElementById('modeBtnLabel');
+    EL.modePopover  = document.getElementById('modePopover');
 
-    document.querySelectorAll('.mode-btn').forEach(btn =>
-        btn.addEventListener('click', () => setMode(btn.dataset.mode))
-    );
-
-    document.querySelectorAll('.quick-prompts button').forEach(btn =>
-        btn.addEventListener('click', () => {
-            EL.input.value = btn.dataset.prompt || '';
-            EL.input.focus();
-            resizeTextarea();
-        })
+    EL.modeBtn?.addEventListener('click', toggleModePopover);
+    document.addEventListener('click', e => {
+        if (!EL.modePopover?.classList.contains('hidden') &&
+            !EL.modePopover.contains(e.target) && e.target !== EL.modeBtn) {
+            EL.modePopover.classList.add('hidden');
+            EL.modeBtn.setAttribute('aria-expanded', 'false');
+        }
+    });
+    document.querySelectorAll('.mode-popover-item').forEach(btn =>
+        btn.addEventListener('click', () => handleModePopoverClick(btn))
     );
 
     EL.newChatBtn?.addEventListener('click', createNewChat);
@@ -81,21 +65,54 @@ document.addEventListener('DOMContentLoaded', () => {
 
     setMode('tutor');
     checkKB();
-    loadChatSessions();
+    await loadChatSessions();
+
+    // Auto-load first chat or create new one
+    if (Chat.sessions.length > 0) {
+        await loadChat(Chat.sessions[0].sessionID);
+    } else {
+        await createNewChat();
+    }
 });
 
 // ── MODE ─────────────────────────────────────────────────────────
 function setMode(mode) {
-    Chat.mode = mode;
-    document.querySelectorAll('.mode-btn').forEach(b => {
-        const active = b.dataset.mode === mode;
-        b.classList.toggle('active', active);
-        b.setAttribute('aria-pressed', String(active));
-    });
-    if (EL.hint)        EL.hint.textContent        = HINTS[mode]        || HINTS.tutor;
-    if (EL.input)       EL.input.placeholder       = PLACEHOLDERS[mode] || PLACEHOLDERS.tutor;
-    if (EL.sendLabel)   EL.sendLabel.textContent   = mode === 'quiz' ? 'Generate Quiz' : 'Send';
-    if (EL.qCountGroup) EL.qCountGroup.style.display = mode === 'quiz' ? '' : 'none';
+    Chat.mode    = mode;
+    Chat.subject = 'General';
+    Chat.module  = 'General';
+    if (EL.input) EL.input.placeholder = PLACEHOLDERS[mode] || PLACEHOLDERS.tutor;
+}
+
+function toggleModePopover() {
+    // Only open popover if clicking the button itself, not for mode selection
+    const hidden = EL.modePopover.classList.toggle('hidden');
+    EL.modeBtn.setAttribute('aria-expanded', String(!hidden));
+}
+
+function handleModePopoverClick(btn) {
+    // Quiz: open the modal
+    if (btn.dataset.action === 'quiz') {
+        EL.modePopover.classList.add('hidden');
+        EL.modeBtn.setAttribute('aria-expanded', 'false');
+        openQuizModal();
+        return;
+    }
+
+    // Other modes: change mode and update label
+    const mode = btn.dataset.mode;
+    const label = btn.querySelector('strong')?.textContent || 'General';
+
+    // Update active state
+    document.querySelectorAll('.mode-popover-item').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    // Set the mode and label
+    setMode(mode);
+    if (EL.modeBtnLabel) EL.modeBtnLabel.textContent = label;
+
+    // Close popover
+    EL.modePopover.classList.add('hidden');
+    EL.modeBtn.setAttribute('aria-expanded', 'false');
 }
 
 // ── FILE ATTACHMENT ───────────────────────────────────────────────
@@ -150,7 +167,6 @@ function fmtBytes(b) {
 async function handleSubmit(e) {
     e.preventDefault();
     if (Chat.busy) return;
-    if (Chat.mode === 'quiz') { await generateQuiz(); return; }
 
     const q = EL.input.value.trim();
     if (!q && !attachedFile) { showToast('Type a question or attach a file.', 'error'); return; }
@@ -161,13 +177,16 @@ async function handleSubmit(e) {
 
     try {
         let data;
+        const subject    = Chat.subject || 'General';
+        const module     = Chat.module  || 'General';
+        const difficulty = Chat.difficulty || 'medium';
 
         if (attachedFile) {
             const fd = new FormData();
             fd.append('question', q);
-            fd.append('subject',    EL.subject.value);
-            fd.append('module',     EL.module.value);
-            fd.append('difficulty', EL.difficulty.value);
+            fd.append('subject',    subject);
+            fd.append('module',     module);
+            fd.append('difficulty', difficulty);
             fd.append('mode',       Chat.mode);
             fd.append('file',       attachedFile);
 
@@ -178,8 +197,7 @@ async function handleSubmit(e) {
             removeAttachedFile();
         } else {
             data = await postJSON('/api/chat', {
-                question: q, subject: EL.subject.value,
-                module: EL.module.value, difficulty: EL.difficulty.value,
+                question: q, subject, module, difficulty,
                 mode: Chat.mode,
             });
         }
@@ -197,24 +215,95 @@ async function handleSubmit(e) {
     }
 }
 
+// ── QUIZ GENERATOR MODAL ──────────────────────────────────────────
+const QuizModal = { subjects: [], modules: [] };
+
+async function openQuizModal() {
+    const modal = document.getElementById('quizGenModal');
+    modal.classList.remove('hidden');
+
+    const subjSelect = document.getElementById('quizSubjectSelect');
+    if (!QuizModal.subjects.length) {
+        try {
+            const res  = await fetch('/api/subjects');
+            const data = await res.json();
+            QuizModal.subjects = (data.subjects || []).map(s => s.subjectName);
+        } catch { QuizModal.subjects = []; }
+    }
+
+    subjSelect.innerHTML = QuizModal.subjects.length
+        ? QuizModal.subjects.map(s => `<option value="${escH(s)}">${escH(s)}</option>`).join('')
+        : '<option value="General">General</option>';
+
+    subjSelect.onchange = () => loadQuizModules(subjSelect.value);
+    await loadQuizModules(subjSelect.value);
+}
+
+async function loadQuizModules(subject) {
+    const moduleSelect = document.getElementById('quizModuleSelect');
+    const topicSelect  = document.getElementById('quizTopicSelect');
+
+    try {
+        const res  = await fetch(`/api/syllabus/topics?subject=${encodeURIComponent(subject)}`);
+        const data = await res.json();
+        QuizModal.modules = data.modules || [];
+    } catch { QuizModal.modules = []; }
+
+    if (!QuizModal.modules.length) {
+        moduleSelect.innerHTML = '<option value="Custom Topic">Custom Topic</option>';
+        topicSelect.innerHTML  = '<option value="">Describe in chat instead</option>';
+        return;
+    }
+
+    moduleSelect.innerHTML = QuizModal.modules.map((m, i) =>
+        `<option value="${i}">${escH(m.module)}</option>`
+    ).join('');
+    moduleSelect.onchange = () => loadQuizTopics(Number(moduleSelect.value));
+    loadQuizTopics(0);
+}
+
+function loadQuizTopics(moduleIdx) {
+    const topicSelect = document.getElementById('quizTopicSelect');
+    const topics = QuizModal.modules[moduleIdx]?.topics || [];
+    topicSelect.innerHTML = topics.length
+        ? topics.map(t => `<option value="${escH(t)}">${escH(t)}</option>`).join('')
+        : '<option value="">Describe in chat instead</option>';
+}
+
+function closeQuizModal() {
+    document.getElementById('quizGenModal').classList.add('hidden');
+}
+
+async function submitQuizModal() {
+    const subject    = document.getElementById('quizSubjectSelect').value || 'General';
+    const moduleIdx  = Number(document.getElementById('quizModuleSelect').value || 0);
+    const moduleName = QuizModal.modules[moduleIdx]?.module || 'Custom Topic';
+    const topic      = document.getElementById('quizTopicSelect').value;
+    const difficulty = document.getElementById('quizDifficultySelect').value;
+    const count      = parseInt(document.getElementById('quizCountInput').value) || 5;
+
+    const topicLabel = topic ? `${moduleName} — ${topic}` : moduleName;
+
+    closeQuizModal();
+    await generateQuiz(subject, topicLabel, difficulty, count);
+}
+
 // ── QUIZ GENERATE ────────────────────────────────────────────────
-async function generateQuiz() {
+async function generateQuiz(subject, module, difficulty, questionCount) {
     setBusy(true);
-    const topic = EL.input.value.trim();
-    EL.input.value = ''; resizeTextarea();
     showThinking();
 
     try {
         const data = await postJSON('/api/quiz/generate', {
-            subject:        EL.subject.value,
-            module:         EL.module.value || topic || 'General',
-            difficulty:     EL.difficulty.value,
-            question_count: parseInt(EL.qCount.value) || 5,
+            subject,
+            module,
+            difficulty,
+            question_count: questionCount,
         });
         removeThinking();
         Chat.quiz = data.quiz;
         addMsg('assistant', `Quiz ready: **${data.quiz?.title || 'HSC Practice Quiz'}** — ${data.quiz?.questions?.length || 0} question(s). Use the card below to answer, then hit Submit.`);
-        addQuizBubble(data.quiz);
+        addQuizBubble(data.quiz, { messageID: data.quizMessageID });
     } catch (err) {
         removeThinking();
         addMsg('assistant', '⚠️ ' + err.message);
@@ -225,25 +314,35 @@ async function generateQuiz() {
 }
 
 // ── QUIZ BUBBLE ───────────────────────────────────────────────────
-function addQuizBubble(quiz) {
+function addQuizBubble(quiz, opts = {}) {
     if (!quiz?.questions?.length) {
         showToast('Quiz data was not in the expected format.', 'error'); return;
     }
 
-    const quizId = 'qz-' + Date.now();
-    Chat.activeQuizId = quizId;
+    const readonly = Boolean(opts.readonly);
+    const answers  = opts.answers || {};
+    const quizId   = 'qz-' + (opts.messageID ? `m${opts.messageID}` : Date.now());
+
+    if (!readonly) {
+        Chat.activeQuizId = quizId;
+        Chat.activeQuizMessageID = opts.messageID || null;
+        Chat.quiz = quiz;
+    }
 
     const questionsHtml = quiz.questions.map((q, i) => {
-        const id    = escH(q.id || `q${i + 1}`);
-        const marks = q.marks || 1;
+        const id     = escH(q.id || `q${i + 1}`);
+        const marks  = q.marks || 1;
+        const saved  = answers[q.id || `q${i + 1}`] ?? '';
 
         let inputHtml = '';
         if (q.type === 'multiple_choice' && Array.isArray(q.options)) {
-            inputHtml = `<div class="quiz-options">${q.options.map(o =>
-                `<label><input type="radio" name="${id}" value="${escH(o)}"><span>${escH(o)}</span></label>`
-            ).join('')}</div>`;
+            inputHtml = `<div class="quiz-options">${q.options.map(o => {
+                const checked  = readonly && saved === o ? 'checked' : '';
+                const disabled = readonly ? 'disabled' : '';
+                return `<label><input type="radio" name="${id}" value="${escH(o)}" ${checked} ${disabled}><span>${escH(o)}</span></label>`;
+            }).join('')}</div>`;
         } else {
-            inputHtml = `<textarea class="quiz-answer" rows="3" placeholder="Type your answer…" aria-label="Answer for question ${i + 1}"></textarea>`;
+            inputHtml = `<textarea class="quiz-answer" rows="3" placeholder="Type your answer…" aria-label="Answer for question ${i + 1}" ${readonly ? 'readonly' : ''}>${escH(saved)}</textarea>`;
         }
 
         return `<div class="quiz-question" data-id="${id}" data-type="${escH(q.type || 'short_answer')}">
@@ -251,6 +350,12 @@ function addQuizBubble(quiz) {
             ${inputHtml}
         </div>`;
     }).join('');
+
+    const actionsHtml = readonly
+        ? `<p class="quiz-submitted-note">✓ Answers submitted — see feedback below</p>`
+        : `<div class="quiz-card-actions">
+               <button class="btn btn-primary" onclick="submitQuiz('${quizId}')" type="button">Submit Answers</button>
+           </div>`;
 
     const art = document.createElement('article');
     art.className = 'message assistant';
@@ -273,18 +378,13 @@ function addQuizBubble(quiz) {
             </div>
             <div class="quiz-card-body" id="${quizId}-body">
                 ${questionsHtml}
-                <div class="quiz-card-actions">
-                    <button class="btn btn-primary" onclick="submitQuiz('${quizId}')" type="button">
-                        Submit Answers
-                    </button>
-                </div>
+                ${actionsHtml}
             </div>
         </div>`;
 
     EL.messages.appendChild(art);
     EL.messages.scrollTop = EL.messages.scrollHeight;
 
-    // Keyboard support for quiz header
     art.querySelector('.quiz-card-header')?.addEventListener('keydown', e => {
         if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleQuizCard(quizId); }
     });
@@ -331,7 +431,11 @@ async function submitQuiz(quizId) {
     setBusy(true); showThinking();
 
     try {
-        const data = await postJSON('/api/quiz/mark', { quiz: Chat.quiz, answers });
+        const data = await postJSON('/api/quiz/mark', {
+            quiz: Chat.quiz,
+            answers,
+            quizMessageID: Chat.activeQuizMessageID,
+        });
         removeThinking();
         addQuizResultBubble(data.result);
     } catch (err) {
@@ -544,8 +648,8 @@ async function createNewChat() {
     try {
         const data = await postJSON('/api/chat/session', {
             title: 'Untitled Chat',
-            subject: (EL.subject?.value || 'General').trim(),
-            module:  (EL.module?.value  || 'General').trim(),
+            subject: 'General',
+            module:  'General',
         });
         Chat.sessionID   = data.sessionID;
         Chat.quiz        = null;
@@ -567,8 +671,31 @@ async function loadChat(sessionID) {
         Chat.sessionID    = sessionID;
         Chat.quiz         = null;
         Chat.activeQuizId = null;
+        Chat.activeQuizMessageID = null;
         EL.messages.innerHTML = '';
-        (data.messages || []).forEach(msg => addMsg(msg.role, msg.content));
+
+        (data.messages || []).forEach(msg => {
+            if (msg.mode === 'quiz') {
+                try {
+                    addQuizBubble(JSON.parse(msg.content), { messageID: msg.messageID });
+                } catch { addMsg(msg.role, msg.content); }
+                return;
+            }
+            if (msg.mode === 'quiz_result') {
+                try {
+                    const payload = JSON.parse(msg.content);
+                    addQuizBubble(payload.quiz, {
+                        messageID: msg.messageID,
+                        answers:   payload.answers,
+                        readonly:  true,
+                    });
+                    addQuizResultBubble(payload.result);
+                } catch { addMsg(msg.role, msg.content); }
+                return;
+            }
+            addMsg(msg.role, msg.content);
+        });
+
         renderChatHistory();
     } catch (err) {
         showToast(err.message, 'error');

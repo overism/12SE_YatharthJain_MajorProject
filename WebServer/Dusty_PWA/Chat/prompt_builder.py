@@ -15,6 +15,11 @@ from __future__ import annotations
 def _resource_block(context: str) -> str:
     return f"RETRIEVED RESOURCES\n{context}\n"
 
+def _subject_label(subject: str) -> str:
+    """Turn 'General' into an instruction for Gemini to infer the subject itself."""
+    if not subject or subject.strip().lower() == "general":
+        return "the relevant NSW HSC subject (identify it yourself from the student's message)"
+    return subject
 
 # ── TUTOR ─────────────────────────────────────────────────────────
 def build_tutor_prompt(
@@ -25,7 +30,7 @@ def build_tutor_prompt(
 ) -> str:
     history = f"\nPREVIOUS CONVERSATION\n{chat_history_text}\n" if chat_history_text else ""
 
-    return f"""You are Dusty, an expert NSW HSC tutor for {subject}.
+    return f"""You are Dusty, an expert NSW HSC tutor. The relevant course is: {_subject_label(subject)}.
 
 Guidelines:
 - Scaffold understanding; do not just give the full answer immediately.
@@ -53,7 +58,7 @@ def build_essay_marking_prompt(
     subject: str,
     retrieved_chunks_text: str,
 ) -> str:
-    return f"""You are an expert NSW HSC marker for {subject}. Use NESA-style marking language.
+    return f"""You are an expert NSW HSC marker. The relevant course is: {_subject_label(subject)}. Use NESA-style marking language.
 
 {_resource_block(retrieved_chunks_text)}
 STUDENT RESPONSE:
@@ -77,7 +82,7 @@ def build_question_generation_prompt(
     difficulty: str,
     retrieved_chunks_text: str,
 ) -> str:
-    return f"""You are an expert NSW HSC examiner for {subject}.
+    return f"""You are an expert NSW HSC examiner. The relevant course is: {_subject_label(subject)}.
 
 {_resource_block(retrieved_chunks_text)}
 Generate a {difficulty}-level HSC-style practice question.
@@ -93,7 +98,6 @@ Include:
 
 Write in plain English only. Do not use any markdown: no **, no *, no ##, no ---, no asterisk bullets. Use numbered lists and plain prose only."""
 
-
 # ── QUIZ GENERATION ───────────────────────────────────────────────
 def build_quiz_generation_prompt(
     subject: str,
@@ -105,8 +109,13 @@ def build_quiz_generation_prompt(
     return f"""You are an expert NSW HSC examiner for {subject}.
 
 {_resource_block(retrieved_chunks_text)}
-Create an interactive quiz.
-Subject: {subject}  |  Module: {module}  |  Difficulty: {difficulty}  |  Questions: {question_count}
+Create an interactive quiz strictly on the syllabus topic named below. Do not
+substitute, generalise, or drift to a different topic or module within
+{subject} — every question must directly and only test this topic.
+
+Subject: {subject}
+Topic (use exactly this scope, do not reinterpret it): {module}
+Difficulty: {difficulty}  |  Questions: {question_count}
 
 Return ONLY valid JSON — no markdown fences, no commentary:
 {{
@@ -137,7 +146,15 @@ Return ONLY valid JSON — no markdown fences, no commentary:
 
 Rules:
 - Mix multiple_choice and short_answer. Use HSC command verbs.
-- Options must be plausible. Only one correct option per MC question.
+- For every multiple_choice question, all four options MUST be unique, plausible,
+  and mutually exclusive. Never repeat the same option text, and never produce
+  two options that are reworded duplicates of the same value or fact.
+- Exactly one option must be unambiguously correct; the other three must be
+  incorrect but realistic distractors a student could plausibly choose.
+- Every question must be answerable using only knowledge of "{module}". If you
+  are uncertain exactly what this topic covers, pick the closest matching NSW
+  syllabus content for {subject} and stay strictly within that scope — do not
+  default to an unrelated topic.
 - Provide exactly {question_count} questions.
 
 YOUR RESPONSE MUST START WITH {{ AND END WITH }}. NO OTHER TEXT WHATSOEVER."""
@@ -173,14 +190,14 @@ Return ONLY valid JSON — no markdown fences, no commentary:
 
 Provide exactly {card_count} flashcards. Use HSC-level language and key definitions."""
 
-
 # ── QUIZ MARKING ──────────────────────────────────────────────────
 def build_quiz_marking_prompt(
     quiz_json: str,
     answers_json: str,
     retrieved_chunks_text: str,
 ) -> str:
-    return f"""You are an expert NSW HSC marker.
+    return f"""You are a supportive, fair NSW HSC marker. Your job is to recognise
+correct understanding, not to penalise different wording from a model answer.
 
 {_resource_block(retrieved_chunks_text)}
 QUIZ:
@@ -189,7 +206,26 @@ QUIZ:
 STUDENT ANSWERS:
 {answers_json}
 
-Mark the attempt. Award partial marks for short-answer questions where appropriate.
+MARKING PHILOSOPHY for short-answer questions:
+- Award full marks if the student's answer demonstrates the same conceptual
+  understanding as the model answer, even if the wording, structure, examples,
+  level of detail, or order of points differs.
+- Do NOT deduct marks for paraphrasing, using different (but equivalent)
+  terminology, giving a different valid example, or explaining points in a
+  different order.
+- Award partial marks where the response is partially correct, covers some
+  but not all required points, or is correct but underdeveloped for the marks
+  available.
+- Only treat a point as missing if the underlying idea is genuinely absent or
+  factually wrong — never because the phrasing differs from the model answer.
+- For multiple_choice questions, mark strictly correct/incorrect against the
+  answer key.
+- If a question's answer key or marking_guidance appears to conflict with
+  established NSW syllabus content, use your own subject knowledge and the
+  retrieved resources above to determine the fair mark — do not penalise the
+  student for a flawed answer key.
+
+Mark the attempt using this generous-but-accurate approach.
 
 **IMPORTANT:** Return ONLY a valid JSON object (not an array). Use this exact structure:
 {{
@@ -202,7 +238,7 @@ Mark the attempt. Award partial marks for short-answer questions where appropria
       "awarded": 0,
       "marks": 1,
       "is_correct": true,
-      "comment": "Specific feedback",
+      "comment": "Specific feedback explaining what was credited and why",
       "correct_answer": "Expected answer"
     }}
   ],
