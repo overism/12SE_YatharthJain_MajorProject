@@ -1,5 +1,7 @@
 /* ================================================================
    chat.js  –  Dusty AI Assistant
+   Fix: PLACEHOLDERS constant added so setMode() never throws,
+        which also fixes history not loading on page reload.
    Quiz renders as collapsible card inside the message stream.
    File attachment sends alongside the question for extra context.
    ================================================================ */
@@ -17,6 +19,26 @@ const Chat = {
 
 const EL = {};
 let attachedFile = null;
+
+// ── CONSTANTS ────────────────────────────────────────────────────
+const PLACEHOLDERS = {
+    tutor:    'Ask Dusty about any HSC topic…',
+    feedback: 'Paste your essay or response here for band-level feedback…',
+    generate: 'Describe the topic or module — Dusty will write a practice question…',
+};
+
+const HINTS = {
+    tutor:    'General mode — scaffolded HSC guidance',
+    feedback: 'Feedback mode — paste a response for a band estimate',
+    generate: 'Practice Question mode — generates one exam-style question',
+};
+
+// Human-readable labels shown in the mode button
+const MODE_LABELS = {
+    tutor:    'General',
+    feedback: 'Feedback',
+    generate: 'Practice Question',
+};
 
 // ── INIT ─────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
@@ -63,11 +85,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     EL.attachBtn?.addEventListener('click', () => EL.fileInput?.click());
     EL.fileInput?.addEventListener('change', e => handleFileAttach(e.target));
 
+    // Initialise mode (PLACEHOLDERS is now defined so this never throws)
     setMode('tutor');
     checkKB();
     await loadChatSessions();
 
-    // Auto-load first chat or create new one
+    // Auto-load most-recent chat or start fresh
     if (Chat.sessions.length > 0) {
         await loadChat(Chat.sessions[0].sessionID);
     } else {
@@ -80,17 +103,18 @@ function setMode(mode) {
     Chat.mode    = mode;
     Chat.subject = 'General';
     Chat.module  = 'General';
-    if (EL.input) EL.input.placeholder = PLACEHOLDERS[mode] || PLACEHOLDERS.tutor;
+    if (EL.input)       EL.input.placeholder = PLACEHOLDERS[mode] || PLACEHOLDERS.tutor;
+    if (EL.hint)        EL.hint.textContent  = HINTS[mode]        || HINTS.tutor;
+    if (EL.modeBtnLabel) EL.modeBtnLabel.textContent = MODE_LABELS[mode] || 'General';
 }
 
 function toggleModePopover() {
-    // Only open popover if clicking the button itself, not for mode selection
     const hidden = EL.modePopover.classList.toggle('hidden');
     EL.modeBtn.setAttribute('aria-expanded', String(!hidden));
 }
 
 function handleModePopoverClick(btn) {
-    // Quiz: open the modal
+    // Quiz: open the modal — everything else just sets Chat.mode
     if (btn.dataset.action === 'quiz') {
         EL.modePopover.classList.add('hidden');
         EL.modeBtn.setAttribute('aria-expanded', 'false');
@@ -98,17 +122,15 @@ function handleModePopoverClick(btn) {
         return;
     }
 
-    // Other modes: change mode and update label
     const mode = btn.dataset.mode;
-    const label = btn.querySelector('strong')?.textContent || 'General';
+    if (!mode) return;
 
-    // Update active state
+    // Update active highlight in popover
     document.querySelectorAll('.mode-popover-item').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
 
-    // Set the mode and label
+    // Apply mode (updates input placeholder, hint text, AND button label)
     setMode(mode);
-    if (EL.modeBtnLabel) EL.modeBtnLabel.textContent = label;
 
     // Close popover
     EL.modePopover.classList.add('hidden');
@@ -120,18 +142,12 @@ function handleFileAttach(input) {
     const file = input.files[0];
     if (!file) return;
 
-    const maxSize = 10 * 1024 * 1024; // 10 MB
-    if (file.size > maxSize) {
-        showToast('File too large — maximum 10 MB.', 'error');
-        input.value = ''; return;
-    }
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) { showToast('File too large — maximum 10 MB.', 'error'); input.value = ''; return; }
 
     const allowed = ['pdf','docx','doc','pptx','ppt','txt','md','png','jpg','jpeg'];
     const ext = file.name.split('.').pop().toLowerCase();
-    if (!allowed.includes(ext)) {
-        showToast(`File type .${ext} is not supported.`, 'error');
-        input.value = ''; return;
-    }
+    if (!allowed.includes(ext)) { showToast(`File type .${ext} is not supported.`, 'error'); input.value = ''; return; }
 
     attachedFile = file;
 
@@ -183,7 +199,7 @@ async function handleSubmit(e) {
 
         if (attachedFile) {
             const fd = new FormData();
-            fd.append('question', q);
+            fd.append('question',   q);
             fd.append('subject',    subject);
             fd.append('module',     module);
             fd.append('difficulty', difficulty);
@@ -196,10 +212,7 @@ async function handleSubmit(e) {
             data = json;
             removeAttachedFile();
         } else {
-            data = await postJSON('/api/chat', {
-                question: q, subject, module, difficulty,
-                mode: Chat.mode,
-            });
+            data = await postJSON('/api/chat', { question: q, subject, module, difficulty, mode: Chat.mode });
         }
 
         removeThinking();
@@ -255,10 +268,8 @@ async function loadQuizModules(subject) {
         return;
     }
 
-    moduleSelect.innerHTML = QuizModal.modules.map((m, i) =>
-        `<option value="${i}">${escH(m.module)}</option>`
-    ).join('');
-    moduleSelect.onchange = () => loadQuizTopics(Number(moduleSelect.value));
+    moduleSelect.innerHTML = QuizModal.modules.map((m, i) => `<option value="${i}">${escH(m.module)}</option>`).join('');
+    moduleSelect.onchange  = () => loadQuizTopics(Number(moduleSelect.value));
     loadQuizTopics(0);
 }
 
@@ -270,9 +281,7 @@ function loadQuizTopics(moduleIdx) {
         : '<option value="">Describe in chat instead</option>';
 }
 
-function closeQuizModal() {
-    document.getElementById('quizGenModal').classList.add('hidden');
-}
+function closeQuizModal() { document.getElementById('quizGenModal').classList.add('hidden'); }
 
 async function submitQuizModal() {
     const subject    = document.getElementById('quizSubjectSelect').value || 'General';
@@ -281,25 +290,16 @@ async function submitQuizModal() {
     const topic      = document.getElementById('quizTopicSelect').value;
     const difficulty = document.getElementById('quizDifficultySelect').value;
     const count      = parseInt(document.getElementById('quizCountInput').value) || 5;
-
     const topicLabel = topic ? `${moduleName} — ${topic}` : moduleName;
-
     closeQuizModal();
     await generateQuiz(subject, topicLabel, difficulty, count);
 }
 
 // ── QUIZ GENERATE ────────────────────────────────────────────────
 async function generateQuiz(subject, module, difficulty, questionCount) {
-    setBusy(true);
-    showThinking();
-
+    setBusy(true); showThinking();
     try {
-        const data = await postJSON('/api/quiz/generate', {
-            subject,
-            module,
-            difficulty,
-            question_count: questionCount,
-        });
+        const data = await postJSON('/api/quiz/generate', { subject, module, difficulty, question_count: questionCount });
         removeThinking();
         Chat.quiz = data.quiz;
         addMsg('assistant', `Quiz ready: **${data.quiz?.title || 'HSC Practice Quiz'}** — ${data.quiz?.questions?.length || 0} question(s). Use the card below to answer, then hit Submit.`);
@@ -308,16 +308,12 @@ async function generateQuiz(subject, module, difficulty, questionCount) {
         removeThinking();
         addMsg('assistant', '⚠️ ' + err.message);
         showToast(err.message, 'error');
-    } finally {
-        setBusy(false);
-    }
+    } finally { setBusy(false); }
 }
 
 // ── QUIZ BUBBLE ───────────────────────────────────────────────────
 function addQuizBubble(quiz, opts = {}) {
-    if (!quiz?.questions?.length) {
-        showToast('Quiz data was not in the expected format.', 'error'); return;
-    }
+    if (!quiz?.questions?.length) { showToast('Quiz data was not in the expected format.', 'error'); return; }
 
     const readonly = Boolean(opts.readonly);
     const answers  = opts.answers || {};
@@ -330,9 +326,9 @@ function addQuizBubble(quiz, opts = {}) {
     }
 
     const questionsHtml = quiz.questions.map((q, i) => {
-        const id     = escH(q.id || `q${i + 1}`);
-        const marks  = q.marks || 1;
-        const saved  = answers[q.id || `q${i + 1}`] ?? '';
+        const id    = escH(q.id || `q${i + 1}`);
+        const marks = q.marks || 1;
+        const saved = answers[q.id || `q${i + 1}`] ?? '';
 
         let inputHtml = '';
         if (q.type === 'multiple_choice' && Array.isArray(q.options)) {
@@ -395,7 +391,6 @@ function toggleQuizCard(quizId) {
     const chevron = document.getElementById(`${quizId}-chevron`);
     const header  = document.querySelector(`#${quizId} .quiz-card-header`);
     if (!body) return;
-
     const collapsed = body.classList.toggle('collapsed');
     if (chevron) chevron.style.transform = collapsed ? 'rotate(180deg)' : '';
     if (header)  header.setAttribute('aria-expanded', String(!collapsed));
@@ -404,7 +399,6 @@ function toggleQuizCard(quizId) {
 // ── QUIZ SUBMIT ───────────────────────────────────────────────────
 async function submitQuiz(quizId) {
     if (!Chat.quiz || Chat.busy) return;
-
     const quizEl = document.getElementById(quizId);
     if (!quizEl) return;
 
@@ -416,40 +410,27 @@ async function submitQuiz(quizId) {
             : (el.querySelector('textarea')?.value.trim() || '');
     });
 
-    if (!Object.values(answers).some(Boolean)) {
-        showToast('Answer at least one question before submitting.', 'error'); return;
-    }
+    if (!Object.values(answers).some(Boolean)) { showToast('Answer at least one question before submitting.', 'error'); return; }
 
-    // Mark quiz as submitted
     const body    = document.getElementById(`${quizId}-body`);
     const actions = body?.querySelector('.quiz-card-actions');
-    if (actions) {
-        actions.innerHTML = '<p class="quiz-submitted-note">✓ Answers submitted — marking below</p>';
-    }
-    toggleQuizCard(quizId); // collapse it
-
+    if (actions) actions.innerHTML = '<p class="quiz-submitted-note">✓ Answers submitted — marking below</p>';
+    toggleQuizCard(quizId);
     setBusy(true); showThinking();
 
     try {
-        const data = await postJSON('/api/quiz/mark', {
-            quiz: Chat.quiz,
-            answers,
-            quizMessageID: Chat.activeQuizMessageID,
-        });
+        const data = await postJSON('/api/quiz/mark', { quiz: Chat.quiz, answers, quizMessageID: Chat.activeQuizMessageID });
         removeThinking();
         addQuizResultBubble(data.result);
     } catch (err) {
         removeThinking();
         addMsg('assistant', '⚠️ ' + err.message);
         showToast(err.message, 'error');
-    } finally {
-        setBusy(false);
-    }
+    } finally { setBusy(false); }
 }
 
 function addQuizResultBubble(result) {
     if (!result) return;
-
     const score = result.score ?? 0;
     const total = result.total ?? 0;
     const pct   = total ? Math.round(score / total * 100) : 0;
@@ -469,7 +450,7 @@ function addQuizResultBubble(result) {
         ? `<div class="quiz-next-steps"><strong>Next Steps</strong><ul>${result.next_steps.map(s => `<li>${escH(s)}</li>`).join('')}</ul></div>`
         : '';
 
-    const html = `
+    addRawMsg('assistant', `
         <div class="quiz-result-card">
             <div class="quiz-result-header">
                 <div class="quiz-result-score-row">
@@ -480,25 +461,19 @@ function addQuizResultBubble(result) {
             </div>
             ${feedbackHtml ? `<div class="quiz-fb-list">${feedbackHtml}</div>` : ''}
             ${stepsHtml}
-        </div>`;
-
-    addRawMsg('assistant', html);
+        </div>`);
 }
 
 // ── MESSAGES ─────────────────────────────────────────────────────
 function addMsg(role, text) {
     const art = document.createElement('article');
     art.className = `message ${role}`;
-
     const av  = document.createElement('div');
     av.className = 'msg-av';
-    av.innerHTML = role === 'user' ? userAvatarHTML()
-        : '<img src="/static/images/icon-192.png" width="22" height="22" alt="Dusty assistant">';
-
+    av.innerHTML = role === 'user' ? userAvatarHTML() : '<img src="/static/images/icon-192.png" width="22" height="22" alt="Dusty assistant">';
     const bub = document.createElement('div');
     bub.className = 'msg-bubble';
     bub.innerHTML = renderMD(text);
-
     art.appendChild(av); art.appendChild(bub);
     EL.messages.appendChild(art);
     EL.messages.scrollTop = EL.messages.scrollHeight;
@@ -507,16 +482,12 @@ function addMsg(role, text) {
 function addRawMsg(role, html) {
     const art = document.createElement('article');
     art.className = `message ${role}`;
-
     const av  = document.createElement('div');
     av.className = 'msg-av';
-    av.innerHTML = role === 'user' ? userAvatarHTML()
-        : '<img src="/static/images/icon-192.png" width="22" height="22" alt="Dusty assistant">';
-
+    av.innerHTML = role === 'user' ? userAvatarHTML() : '<img src="/static/images/icon-192.png" width="22" height="22" alt="Dusty assistant">';
     const bub = document.createElement('div');
     bub.className = 'msg-bubble';
     bub.innerHTML = html;
-
     art.appendChild(av); art.appendChild(bub);
     EL.messages.appendChild(art);
     EL.messages.scrollTop = EL.messages.scrollHeight;
@@ -531,15 +502,12 @@ function showThinking() {
     Chat.thinkId = 'think-' + Date.now();
     const art = document.createElement('article');
     art.className = 'message thinking'; art.id = Chat.thinkId;
-
     const av  = document.createElement('div');
     av.className = 'msg-av';
     av.innerHTML = '<img src="/static/images/icon-192.png" width="22" height="22" alt="Dusty assistant">';
-
     const bub = document.createElement('div');
     bub.className = 'msg-bubble';
     bub.innerHTML = `<span style="color:#aaa;font-size:13px">Thinking</span><span class="thinking-dots"><span></span><span></span><span></span></span>`;
-
     art.appendChild(av); art.appendChild(bub);
     EL.messages.appendChild(art);
     EL.messages.scrollTop = EL.messages.scrollHeight;
@@ -553,7 +521,6 @@ function removeThinking() {
 function renderMD(raw) {
     if (!raw) return '<p>No response.</p>';
     let s = escH(raw);
-
     s = s.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>');
     s = s.replace(/^##\s+(.+)$/gm,  '<h2>$1</h2>');
     s = s.replace(/^#\s+(.+)$/gm,   '<h1>$1</h1>');
@@ -562,8 +529,7 @@ function renderMD(raw) {
     s = s.replace(/\*(.+?)\*/g,         '<em>$1</em>');
     s = s.replace(/`([^`]+)`/g,         '<code>$1</code>');
     s = s.replace(/^---$/gm,            '<hr>');
-    s = s.replace(/\[(.+?)\]\{(red|green|blue|orange|purple|yellow|teal|pink)\}/g,
-                  '<span class="chat-colour-$2">$1</span>');
+    s = s.replace(/\[(.+?)\]\{(red|green|blue|orange|purple|yellow|teal|pink)\}/g, '<span class="chat-colour-$2">$1</span>');
 
     const blocks = s.split(/\n{2,}/);
     return blocks.map(b => {
@@ -584,16 +550,13 @@ function renderMD(raw) {
 // ── INGEST ───────────────────────────────────────────────────────
 async function triggerIngest() {
     const btn = document.getElementById('ingestBtn');
-    if (btn) { btn.disabled = true; }
+    if (btn) btn.disabled = true;
     try {
         const data = await postJSON('/api/ingest', {});
         showToast(data.status || 'Ingestion started.', 'info');
         setTimeout(checkKB, 5000);
-    } catch (err) {
-        showToast(err.message, 'error');
-    } finally {
-        setTimeout(() => { if (btn) btn.disabled = false; }, 3000);
-    }
+    } catch (err) { showToast(err.message, 'error'); }
+    finally { setTimeout(() => { if (btn) btn.disabled = false; }, 3000); }
 }
 
 // ── KB STATUS ────────────────────────────────────────────────────
@@ -603,9 +566,9 @@ async function checkKB() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Status check failed');
         const n = data.chunks_in_database || 0;
-        EL.kbStatus.classList.toggle('ready', n > 0);
-        EL.kbStatus.classList.remove('error');
-        EL.kbText.textContent = n > 0 ? `${n.toLocaleString()} chunks` : 'No chunks — Rebuild KB';
+        EL.kbStatus?.classList.toggle('ready', n > 0);
+        EL.kbStatus?.classList.remove('error');
+        if (EL.kbText) EL.kbText.textContent = n > 0 ? `${n.toLocaleString()} chunks` : 'No chunks — Rebuild KB';
     } catch {
         EL.kbStatus?.classList.add('error');
         EL.kbStatus?.classList.remove('ready');
@@ -646,21 +609,15 @@ function renderChatHistory() {
 
 async function createNewChat() {
     try {
-        const data = await postJSON('/api/chat/session', {
-            title: 'Untitled Chat',
-            subject: 'General',
-            module:  'General',
-        });
-        Chat.sessionID   = data.sessionID;
-        Chat.quiz        = null;
+        const data = await postJSON('/api/chat/session', { title: 'Untitled Chat', subject: 'General', module: 'General' });
+        Chat.sessionID    = data.sessionID;
+        Chat.quiz         = null;
         Chat.activeQuizId = null;
         EL.messages.innerHTML = '';
         addMsg('assistant', 'New chat started. What would you like to study?');
         await loadChatSessions();
         showToast('New chat created', 'info');
-    } catch (err) {
-        showToast(err.message, 'error');
-    }
+    } catch (err) { showToast(err.message, 'error'); }
 }
 
 async function loadChat(sessionID) {
@@ -668,27 +625,22 @@ async function loadChat(sessionID) {
         const res  = await fetch(`/api/chat/session/${sessionID}`);
         if (!res.ok) throw new Error('Could not load chat');
         const data = await res.json();
-        Chat.sessionID    = sessionID;
-        Chat.quiz         = null;
-        Chat.activeQuizId = null;
-        Chat.activeQuizMessageID = null;
-        EL.messages.innerHTML = '';
+        Chat.sessionID             = sessionID;
+        Chat.quiz                  = null;
+        Chat.activeQuizId          = null;
+        Chat.activeQuizMessageID   = null;
+        EL.messages.innerHTML      = '';
 
         (data.messages || []).forEach(msg => {
             if (msg.mode === 'quiz') {
-                try {
-                    addQuizBubble(JSON.parse(msg.content), { messageID: msg.messageID });
-                } catch { addMsg(msg.role, msg.content); }
+                try { addQuizBubble(JSON.parse(msg.content), { messageID: msg.messageID }); }
+                catch { addMsg(msg.role, msg.content); }
                 return;
             }
             if (msg.mode === 'quiz_result') {
                 try {
                     const payload = JSON.parse(msg.content);
-                    addQuizBubble(payload.quiz, {
-                        messageID: msg.messageID,
-                        answers:   payload.answers,
-                        readonly:  true,
-                    });
+                    addQuizBubble(payload.quiz, { messageID: msg.messageID, answers: payload.answers, readonly: true });
                     addQuizResultBubble(payload.result);
                 } catch { addMsg(msg.role, msg.content); }
                 return;
@@ -697,9 +649,7 @@ async function loadChat(sessionID) {
         });
 
         renderChatHistory();
-    } catch (err) {
-        showToast(err.message, 'error');
-    }
+    } catch (err) { showToast(err.message, 'error'); }
 }
 
 async function deleteChatSession(sessionID) {
@@ -711,40 +661,30 @@ async function deleteChatSession(sessionID) {
         renderChatHistory();
         if (Chat.sessionID === sessionID) await createNewChat();
         showToast('Chat deleted', 'info');
-    } catch (err) {
-        showToast('Could not delete chat', 'error');
-    }
+    } catch { showToast('Could not delete chat', 'error'); }
 }
 
 async function renameChatSession(sessionID) {
-    const current  = Chat.sessions.find(s => s.sessionID === sessionID);
+    const current   = Chat.sessions.find(s => s.sessionID === sessionID);
     const nextTitle = prompt('Rename chat', current?.title || 'Untitled Chat');
     if (nextTitle === null) return;
     const title = nextTitle.trim();
     if (!title) { showToast('Chat title cannot be empty', 'error'); return; }
     try {
         const res  = await fetch(`/api/chat/session/${sessionID}`, {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title })
+            method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title })
         });
         const data = await res.json().catch(() => ({}));
         if (!res.ok) throw new Error(data.error || 'Could not rename chat');
         Chat.sessions = Chat.sessions.map(s => s.sessionID === sessionID ? { ...s, title: data.title } : s);
         renderChatHistory();
         showToast('Chat renamed', 'info');
-    } catch (err) {
-        showToast(err.message, 'error');
-    }
+    } catch (err) { showToast(err.message, 'error'); }
 }
 
 // ── UTILITIES ────────────────────────────────────────────────────
 async function postJSON(url, body) {
-    const res  = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-    });
+    const res  = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.error || `Request failed (${res.status})`);
     return data;
@@ -754,7 +694,7 @@ function setBusy(v) {
     Chat.busy = v;
     if (EL.sendBtn) {
         EL.sendBtn.disabled = v;
-        if (EL.sendLabel) EL.sendLabel.textContent = v ? '…' : (Chat.mode === 'quiz' ? 'Generate Quiz' : 'Send');
+        if (EL.sendLabel) EL.sendLabel.textContent = v ? '…' : 'Send';
     }
 }
 

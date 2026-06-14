@@ -10,7 +10,6 @@
         <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
         <link rel="stylesheet" href="{{ url_for('static', filename='css/timer.css') }}">
         <script defer src="{{ url_for('static', filename='js/subject-colours.js') }}"></script>
-        <script defer src="{{ url_for('static', filename='js/subject-colours.js') }}"></script>
         <script defer src="{{ url_for('static', filename='js/dusty.js') }}"></script>
         <script defer src="{{ url_for('static', filename='js/timer.js') }}"></script>
     </head>
@@ -23,8 +22,8 @@
     </script>
     <body>
         <sidebar class="sidebar" role="banner">
-            <a class="brand" href="{{ url_for('home') }}" aria-label="Gamify home">
-                <img src="{{ url_for('static', filename='images/transp512.png') }}" alt="Gamify logo">
+            <a class="brand" href="{{ url_for('home') }}" aria-label="Dusty home">
+                <img src="{{ url_for('static', filename='images/transp512.png') }}" alt="Dusty logo">
             </a>
             <nav class="nav" role="navigation" aria-label="Auth pages">
                 <a class="btn btn-ghost" href="{{ url_for('home') }}">Dashboard</a>
@@ -52,18 +51,35 @@
             </div>
         </div>
 
-        <!-- Main Content Container -->
+        <!-- ══ AMBIENT TIMER STAGE ══ -->
         <div class="timer-container">
 
-            <!-- Timer Screen -->
-            <div id="timerScreen" class="timer-screen active">
-                <div class="timer-header">
-                    <h1 class="timer-title">Study Timer</h1>
-                    <button class="btn btn-ghost" id="popoutBtn" type="button">Pop Out Timer</button>
+            <!-- Background layer -->
+            <div class="ambient-bg" id="ambientBg">
+                <video id="ambientVideo" class="ambient-media hidden" autoplay loop muted playsinline></video>
+                <img id="ambientImage" class="ambient-media hidden" alt="">
+                <div id="ambientGradient" class="ambient-media ambient-gradient"></div>
+            </div>
+            <div class="ambient-overlay"></div>
+
+            <div class="ambient-stage">
+
+                <!-- Top bar -->
+                <div class="ambient-topbar">
+                    <div>
+                        <h1 class="ambient-title">Study Timer</h1>
+                    </div>
+                    <div class="ambient-topbar-actions">
+                        <button class="btn btn-ghost" id="popoutBtn" type="button">Pop Out Timer</button>
+                        <button class="btn btn-ghost" id="dockToggleBtn" type="button" aria-expanded="false">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+                            Ambience &amp; Presets
+                        </button>
+                    </div>
                 </div>
 
-                <!-- Timer Display Section -->
-                <div class="timer-display-section">
+                <!-- Centre glass timer -->
+                <div id="timerScreen" class="timer-glass-panel">
                     <div class="timer-preset-label" id="presetLabel">Custom Timer</div>
                     <div class="timer-display" id="timerDisplay">01:00</div>
                     <div class="timer-subject-line">
@@ -80,36 +96,48 @@
                             <span class="stat-value" id="statusValue">Ready</span>
                         </div>
                     </div>
+
+                    <!-- Timer Controls -->
+                    <div class="timer-controls">
+                        <button class="control-btn reset-btn" id="resetBtn" title="Reset timer">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+                                <path d="M3 3v5h5"></path>
+                            </svg>
+                        </button>
+                        <button class="control-btn play-btn" id="playBtn" title="Start timer">
+                            <img src="{{ url_for('static', filename='images/play-icon.svg') }}" alt="Play icon" width="35px">
+                        </button>
+                        <button class="control-btn pause-btn hidden" id="pauseBtn" title="Pause timer">
+                            <svg viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"></path>
+                            </svg>
+                        </button>
+                    </div>
+
                     <div class="finish-session-row">
                         <button class="btn btn-primary finish-session-btn" id="finishSessionBtn" type="button" disabled>Finish Session</button>
                     </div>
                 </div>
 
-                <!-- Timer Controls -->
-                <div class="timer-controls">
-                    <button class="control-btn reset-btn" id="resetBtn" title="Reset timer">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
-                            <path d="M3 3v5h5"></path>
-                        </svg>
-                    </button>
-                    <button class="control-btn play-btn" id="playBtn" title="Start timer">
-                        <svg viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M8 5v14l11-7z"></path>
-                        </svg>
-                    </button>
-                    <button class="control-btn pause-btn hidden" id="pauseBtn" title="Pause timer">
-                        <svg viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"></path>
-                        </svg>
-                    </button>
+                <!-- spacer so dock doesn't overlap -->
+                <div class="ambient-stage-spacer"></div>
+            </div>
+
+            <!-- ══ AMBIENCE / PRESETS DOCK ══ -->
+            <aside class="ambience-dock" id="ambienceDock" aria-hidden="true">
+                <div class="dock-handle" id="dockHandle"></div>
+                <div class="dock-tabs" role="tablist">
+                    <button class="dock-tab active" data-tab="presets" type="button" role="tab">Timer Presets</button>
+                    <button class="dock-tab" data-tab="backgrounds" type="button" role="tab">Background</button>
+                    <button class="dock-tab" data-tab="sounds" type="button" role="tab">Sounds</button>
                 </div>
 
-                <!-- Presets Section -->
-                <div class="presets-section">
-                    <div class="presets-header">
-                        <h2 class="presets-title">Timer Presets</h2>
-                        <button class="btn btn-secondary add-preset-btn" id="addPresetBtn" title="Create new preset">
+                <!-- Presets Panel -->
+                <div class="dock-panel" id="dockPresets" role="tabpanel">
+                    <div class="dock-panel-head">
+                        <h3>Timer Presets</h3>
+                        <button class="btn btn-secondary add-preset-btn" id="addPresetBtn" title="Create new preset" type="button">
                             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                                 <line x1="12" y1="5" x2="12" y2="19"></line>
                                 <line x1="5" y1="12" x2="19" y2="12"></line>
@@ -121,7 +149,39 @@
                         <!-- Populated by JavaScript -->
                     </div>
                 </div>
-            </div>
+
+                <!-- Backgrounds Panel -->
+                <div class="dock-panel hidden" id="dockBackgrounds" role="tabpanel">
+                    <div class="dock-panel-head">
+                        <h3>Background</h3>
+                        <label class="btn btn-secondary upload-btn" for="bgUploadInput">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            Upload
+                        </label>
+                        <input type="file" id="bgUploadInput" accept="image/*,video/mp4,video/webm" style="display:none">
+                    </div>
+                    <p class="dock-hint">Choose an ambient scene, or upload your own image, GIF or video.</p>
+                    <div class="ambience-grid" id="bgPresetGrid"></div>
+                    <h4 class="dock-subheading" id="bgCustomHeading" style="display:none">Your uploads</h4>
+                    <div class="ambience-grid" id="bgCustomGrid"></div>
+                </div>
+
+                <!-- Sounds Panel -->
+                <div class="dock-panel hidden" id="dockSounds" role="tabpanel">
+                    <div class="dock-panel-head">
+                        <h3>Ambient Sounds</h3>
+                        <label class="btn btn-secondary upload-btn" for="soundUploadInput">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                            Upload
+                        </label>
+                        <input type="file" id="soundUploadInput" accept="audio/*" style="display:none">
+                    </div>
+                    <p class="dock-hint">Mix multiple ambient sounds with independent volume — like a focus playlist.</p>
+                    <div class="sound-list" id="soundPresetList"></div>
+                    <h4 class="dock-subheading" id="soundCustomHeading" style="display:none">Your uploads</h4>
+                    <div class="sound-list" id="soundCustomList"></div>
+                </div>
+            </aside>
         </div>
 
         <!-- Create/Edit Preset Modal -->
