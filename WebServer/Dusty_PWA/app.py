@@ -3178,17 +3178,20 @@ def get_progress():
     user_id = session.get('user_id')
     try:
         conn = get_db_connection()
-
+ 
+        # ── Task status counts ────────────────────────────────────
         task_stats = conn.execute(
             '''SELECT status, COUNT(*) as count, AVG(progress) as avg_progress
-               FROM tasks
-               WHERE userID = ?
-               GROUP BY status''',
+               FROM tasks WHERE userID = ? GROUP BY status''',
             (user_id,)
         ).fetchall()
-
+ 
+        # ── Tasks by subject (includes avg progress + task count) ─
         tasks_by_subject = conn.execute(
-            '''SELECT s.subjectName, COUNT(*) as count, AVG(t.progress) as avg_progress
+            '''SELECT s.subjectName,
+                      COUNT(*)          AS count,
+                      AVG(t.progress)   AS avg_progress,
+                      SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) AS completed
                FROM tasks t
                JOIN subjects s ON t.subjectID = s.subjectID
                WHERE t.userID = ?
@@ -3196,43 +3199,82 @@ def get_progress():
                ORDER BY count DESC''',
             (user_id,)
         ).fetchall()
-
+ 
+        # ── Upcoming tasks ────────────────────────────────────────
         upcoming_tasks = conn.execute(
             '''SELECT title, dueDate, progress
                FROM tasks
                WHERE userID = ? AND status != 'completed'
-               ORDER BY dueDate ASC
-               LIMIT 6''',
+               ORDER BY dueDate ASC LIMIT 6''',
             (user_id,)
         ).fetchall()
-
+ 
+        # ── Timer session aggregates ──────────────────────────────
         session_stats = conn.execute(
             '''SELECT
-                 COUNT(*) as total_sessions,
-                 COALESCE(SUM(durationSeconds), 0) as total_duration_seconds,
-                 COALESCE(SUM(timeSpentSeconds), 0) as total_time_spent_seconds,
-                 SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as completed_sessions,
-                 SUM(CASE WHEN status = 'paused' THEN 1 ELSE 0 END) as paused_sessions,
-                 SUM(CASE WHEN status = 'abandoned' THEN 1 ELSE 0 END) as abandoned_sessions
+                 COUNT(*)                                                        AS total_sessions,
+                 COALESCE(SUM(durationSeconds),    0)                            AS total_duration_seconds,
+                 COALESCE(SUM(timeSpentSeconds),   0)                            AS total_time_spent_seconds,
+                 SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END)           AS completed_sessions,
+                 SUM(CASE WHEN status = 'paused'    THEN 1 ELSE 0 END)           AS paused_sessions,
+                 SUM(CASE WHEN status = 'abandoned' THEN 1 ELSE 0 END)           AS abandoned_sessions
                FROM timer_sessions
                WHERE userID = ?''',
             (user_id,)
         ).fetchone()
-
+ 
+        # ── NEW: Flashcard accuracy per subject ───────────────────
+        flashcard_by_subject = conn.execute(
+            '''SELECT
+                 d.subject,
+                 COUNT(r.resultID)                                                      AS sessions,
+                 COALESCE(SUM(r.knew),   0)                                             AS total_knew,
+                 COALESCE(SUM(r.unsure), 0)                                             AS total_unsure,
+                 COALESCE(SUM(r.missed), 0)                                             AS total_missed,
+                 COALESCE(SUM(r.totalCards), 0)                                         AS total_cards,
+                 ROUND(
+                     AVG(
+                         CAST(r.knew AS REAL) / MAX(r.totalCards, 1) * 100
+                     ), 1
+                 )                                                                       AS avg_accuracy_pct
+               FROM flashcard_results r
+               JOIN flashcard_decks d ON r.deckID = d.deckID
+               WHERE r.userID = ?
+               GROUP BY d.subject
+               ORDER BY sessions DESC''',
+            (user_id,)
+        ).fetchall()
+ 
+        # ── NEW: Time-on-task per subject (from timer sessions) ───
+        time_by_subject = conn.execute(
+            '''SELECT
+                 s.subjectName,
+                 COALESCE(SUM(ts.timeSpentSeconds), 0) AS total_seconds,
+                 COUNT(ts.sessionID)                    AS session_count
+               FROM timer_sessions ts
+               JOIN subjects s ON ts.subjectID = s.subjectID
+               WHERE ts.userID = ?
+               GROUP BY s.subjectName
+               ORDER BY total_seconds DESC''',
+            (user_id,)
+        ).fetchall()
+ 
         conn.close()
-
+ 
         return jsonify({
             'tasks': {
-                'stats': [dict(stat) for stat in task_stats],
-                'by_subject': [dict(stat) for stat in tasks_by_subject],
-                'upcoming': [dict(task) for task in upcoming_tasks],
+                'stats':       [dict(r) for r in task_stats],
+                'by_subject':  [dict(r) for r in tasks_by_subject],
+                'upcoming':    [dict(r) for r in upcoming_tasks],
             },
-            'sessions': dict(session_stats),
+            'sessions':          dict(session_stats),
+            'flashcard_stats':   [dict(r) for r in flashcard_by_subject],
+            'time_by_subject':   [dict(r) for r in time_by_subject],
         })
     except Exception as e:
         print(f'[GET_PROGRESS] Error: {e}')
+        traceback.print_exc()
         return jsonify({'error': 'Could not fetch progress'}), 500
-
 
 @app.route('/api/resources')
 @login_required
@@ -3292,33 +3334,42 @@ def get_resources():
 @app.route('/resource')
 @login_required
 def view_resource():
-    """Serve a resource file to the browser."""
-    source = request.args.get('source')
-    path   = request.args.get('path')
+    source = request.args.get('source', '').strip()
+    path   = request.args.get('path',   '').strip()
     if not source or not path:
         abort(400)
-
+ 
     from RAG.paths import SUBJECT_RESOURCE_DIRS, CHAT_DATABASE_SUBJECT_DIRS
-
-    normalized_path = _normalize_relative_path(path)
-    if not normalized_path:
+ 
+    normalized = _normalize_relative_path(path)
+    if not normalized:
         abort(400)
-
+ 
+    # ── Decide which root directories to search ───────────────────
     if source == 'resources':
-        roots = SUBJECT_RESOURCE_DIRS.values()
+        search_roots = list(SUBJECT_RESOURCE_DIRS.values())
     elif source == 'chat_db':
-        roots = CHAT_DATABASE_SUBJECT_DIRS.values()
+        search_roots = list(CHAT_DATABASE_SUBJECT_DIRS.values())
     elif source == 'user_uploads':
-        # Handled separately — user uploads are served through a dedicated route.
-        abort(400)
+        # user-upload files have their own dedicated route
+        abort(400, 'Use /resource/upload/<filename> for user uploads')
     else:
-        abort(400)
-
-    for root_dir in roots:
-        resolved = _safe_join(root_dir, normalized_path)
+        abort(400, f'Unknown source: {source}')
+ 
+    for root_dir in search_roots:
+        resolved = _safe_join(root_dir, normalized)
         if resolved and os.path.isfile(resolved):
-            return send_from_directory(root_dir, normalized_path)
-
+            directory = os.path.dirname(resolved)
+            filename  = os.path.basename(resolved)
+            mime_type, _ = __import__('mimetypes').guess_type(filename)
+            as_attachment = False  # open inline in browser
+            return send_from_directory(
+                directory, filename,
+                mimetype=mime_type or 'application/octet-stream',
+                as_attachment=as_attachment,
+            )
+ 
+    # Nothing found — return a proper 404 (NOT the SPA shell)
     abort(404)
 
 
@@ -4335,6 +4386,14 @@ def clear_history():
 
 # ── /api/chat/sessions ────────────────────────────────────────────
 
+@app.route('/api/chat/clear-session', methods=['POST'])
+@login_required
+def clear_chat_session():
+    """Clear server-side chat context so old file references don't bleed."""
+    session.pop('active_chat_session', None)
+    session.pop('active_quiz', None)
+    return jsonify({'ok': True})
+
 @app.route('/api/chat/sessions', methods=['GET'])
 @login_required
 def get_chat_sessions():
@@ -4711,10 +4770,21 @@ def get_ambience_prefs():
         print(f'[AMBIENCE_PREFS_GET] {exc}')
         return jsonify({}), 500
 
-# SPA fallback -> index
+# Known Flask-rendered frontend paths
+_FRONTEND_PATHS = {
+    '/', '/home', '/login', '/logout', '/signup', '/onboarding',
+    '/profile', '/calendar', '/tasks', '/timer', '/chat',
+    '/flashcards', '/progress', '/resources', '/offline.html',
+}
+ 
 @app.errorhandler(404)
 def not_found(e):
-    return render_template('index.html'), 404
+    path = request.path
+    # Only serve the SPA shell for known page routes
+    if path in _FRONTEND_PATHS or path.startswith('/static/'):
+        return render_template('index.html'), 404
+    # API / resource / unknown paths get a plain 404 JSON response
+    return jsonify({'error': 'Not found', 'path': path}), 404
 
 if __name__ == '__main__':
     debug_db()

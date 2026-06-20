@@ -68,6 +68,8 @@ async function loadProgress() {
         renderStudyTimeBySubject(sessions);
         renderSubjectProgressBars(prog.tasks?.by_subject || []);
         renderSessionOutcomesChart(prog.sessions || {});
+        renderFlashcardStats(prog.flashcard_stats || []);
+        renderTimeBySubject(prog.time_by_subject || []);
         renderWeeklyChart(sessions);
         renderUpcoming(prog.tasks?.upcoming || []);
         renderSessionsTable(sessions.slice(0, 8));
@@ -170,6 +172,65 @@ function renderStudyTimeBySubject(sessions) {
             }
         }
     });
+}
+
+function renderFlashcardStats(stats) {
+    destroyChart('chartFlashcards');
+    const canvas = document.getElementById('chartFlashcards');
+    if (!canvas) return;
+    if (!stats.length) { showEmpty('chartFlashcards'); return; }
+    if (!CHARTS_AVAILABLE) { showEmpty('chartFlashcards', 'Charts unavailable.'); return; }
+ 
+    const labels   = stats.map(s => escHtml(s.subject));
+    const knew     = stats.map(s => Number(s.total_knew   || 0));
+    const unsure   = stats.map(s => Number(s.total_unsure || 0));
+    const missed   = stats.map(s => Number(s.total_missed || 0));
+ 
+    charts.flashcards = new Chart(canvas, {
+        type: 'bar',
+        data: {
+            labels,
+            datasets: [
+                { label: 'Knew it',  data: knew,   backgroundColor: '#00bf63', borderRadius: 4 },
+                { label: 'Unsure',   data: unsure,  backgroundColor: '#ffd359', borderRadius: 4 },
+                { label: 'Missed',   data: missed,  backgroundColor: '#ff3131', borderRadius: 4 },
+            ],
+        },
+        options: {
+            responsive: true, maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'bottom', labels: { padding: 14, font: { size: 12, weight: '600' } } },
+                tooltip: { callbacks: { label: ctx => ` ${ctx.dataset.label}: ${ctx.raw} cards` } },
+            },
+            scales: {
+                x: { stacked: true, grid: { display: false } },
+                y: { stacked: true, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { precision: 0 } },
+            },
+        },
+    });
+}
+ 
+// ── TIME ON TASK PER SUBJECT (supplement renderStudyTimeBySubject) ─────────
+function renderTimeBySubject(rows) {
+    const el = document.getElementById('timeBySubjectList');
+    if (!el) return;
+    if (!rows.length) { el.innerHTML = '<p class="empty-state" style="padding:16px 0">No study sessions recorded yet.</p>'; return; }
+ 
+    el.innerHTML = rows.map((r, i) => {
+        const hrs = (Number(r.total_seconds || 0) / 3600).toFixed(1);
+        const col = SUBJECT_NAME_COLOURS[r.subjectName] || window.getSubjectColour?.('orange') || '#f5761c';
+        const maxSecs = rows[0].total_seconds || 1;
+        const pct = Math.round(Number(r.total_seconds) / maxSecs * 100);
+        return `<div class="subject-bar-row">
+            <div class="subject-bar-top">
+                <span class="subject-bar-name">${r.subjectName}</span>
+                <span class="subject-bar-stats">${r.session_count} session${r.session_count !== 1 ? 's' : ''} · ${hrs}h</span>
+            </div>
+            <div class="subject-bar-track">
+                <div class="subject-bar-fill" style="width:${pct}%;background:${col}"></div>
+            </div>
+        </div>`;
+    }).join('');
 }
 
 function renderSubjectProgressBars(bySubject) {

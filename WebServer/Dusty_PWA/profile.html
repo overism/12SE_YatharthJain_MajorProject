@@ -32,18 +32,20 @@
     <div class="modal-box">
         <h2 class="modal-title">📷 Change Profile Picture</h2>
         <form id="avatarForm" method="POST" action="/upload-avatar" enctype="multipart/form-data">
-            <label class="file-drop" for="avatarFileInput">
-                <div class="file-drop-icon">🖼</div>
-                <p><strong>Click to choose</strong> or drag & drop</p>
-                <p style="font-size:12px;margin-top:4px">PNG, JPG or GIF · max 5 MB</p>
-                <input type="file" id="avatarFileInput" name="avatar" accept="image/*" onchange="previewAvatar(event)">
-            </label>
+            <div class="file-drop">
+                <label for="avatarFileInput">
+                    <div class="file-drop-icon">🖼</div>
+                    <p><strong>Click to choose</strong> or drag & drop</p>
+                    <p style="font-size:12px;margin-top:4px">PNG, JPG or GIF · max 5 MB</p>
+                    <input type="file" id="avatarFileInput" name="avatar" accept="image/*" onchange="previewAvatar(event)">
+                </label>
+            </div>
             <div id="avatarPreviewWrap" style="display:none;margin-top:12px;text-align:center">
                 <img id="avatarPreview" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid rgba(245,118,28,.3)">
             </div>
             <div class="modal-actions">
                 <button type="button" class="btn btn-outline" onclick="closeAvatarModal()">Cancel</button>
-                <button type="submit" class="btn btn-primary" id="avatarUploadBtn" disabled>Upload</button>
+                <button type="submit" class="btn btn-primary" id="avatarUploadBtn" enabled>Upload</button>
             </div>
         </form>
     </div>
@@ -94,7 +96,7 @@
         </div>
         <div style="display:flex;gap:10px;flex-wrap:wrap">
             <a class="btn btn-ghost" href="{{ url_for('home') }}">← Dashboard</a>
-            <button class="btn btn-ghost" type="button" onclick="openPrefsModal()">⚙ Preferences</button>
+            <button class="btn btn-ghost" type="button" onclick="openPrefsModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg> Preferences</button>
             <a class="btn btn-secondary" href="{{ url_for('logout') }}">Log out</a>
         </div>
     </header>
@@ -112,7 +114,7 @@
                             <span id="avatarInitial">{{ user.userName[0].upper() }}</span>
                         {% endif %}
                     </div>
-                    <button class="avatar-change-btn" title="Change avatar" onclick="openAvatarModal()">✏️</button>
+                    <button class="avatar-change-btn" title="Change avatar" onclick="openAvatarModal()" style="line-height: 1"><img src="{{ url_for('static', filename='images/rename-icon.svg') }}" alt="Edit" style="margin-left: 0px; margin-bottom: 2px;"></button>
                 </div>
                 <div class="avatar-info">
                     <h2 id="displayName">{{ user.userName }}</h2>

@@ -627,54 +627,75 @@ function renderChatHistory() {
 }
 
 async function createNewChat() {
+    // 1. Clear server-side session so old file context is gone
+    await fetch('/api/chat/clear-session', { method: 'POST' }).catch(() => {});
+ 
     try {
-        const data = await postJSON('/api/chat/session', { title: 'Untitled Chat', subject: 'General', module: 'General' });
-        Chat.sessionID    = data.sessionID;
-        Chat.quiz         = null;
-        Chat.activeQuizId = null;
+        const data = await postJSON('/api/chat/session', {
+            title:   'Untitled Chat',
+            subject: 'General',
+            module:  'General',
+        });
+        Chat.sessionID            = data.sessionID;
+        Chat.quiz                 = null;
+        Chat.activeQuizId         = null;
+        Chat.activeQuizMessageID  = null;
+        attachedFile              = null;        // clear any stale attachment
+        removeAttachedFile();
         EL.messages.innerHTML = '';
-        addMsg('assistant', '**Ready when you are.**\nAsk any HSC question, paste a response for band feedback, generate an exam question, or switch to Quiz mode.');
+        addMsg('assistant', 'New chat started. What would you like to study?');
         await loadChatSessions();
         showToast('New chat created', 'info');
-    } catch (err) { showToast(err.message, 'error'); }
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
 }
 
 async function loadChat(sessionID) {
+    // Reset all local state FIRST to prevent cross-session contamination
+    Chat.sessionID            = null;
+    Chat.quiz                 = null;
+    Chat.activeQuizId         = null;
+    Chat.activeQuizMessageID  = null;
+    attachedFile              = null;
+    removeAttachedFile();
+ 
+    // Tell Flask which session is now active (clears old file context)
+    await fetch('/api/chat/clear-session', { method: 'POST' }).catch(() => {});
+ 
     try {
         const res  = await fetch(`/api/chat/session/${sessionID}`);
         if (!res.ok) throw new Error('Could not load chat');
         const data = await res.json();
-        Chat.sessionID             = sessionID;
-        Chat.quiz                  = null;
-        Chat.activeQuizId          = null;
-        Chat.activeQuizMessageID   = null;
-        EL.messages.innerHTML      = '';
-
-        const messages = data.messages || [];
-        messages.forEach(msg => {
+        Chat.sessionID = sessionID;
+        EL.messages.innerHTML = '';
+ 
+        (data.messages || []).forEach(msg => {
             if (msg.mode === 'quiz') {
-                try { addQuizBubble(JSON.parse(msg.content), { messageID: msg.messageID }); }
-                catch { addMsg(msg.role, msg.content); }
+                try {
+                    addQuizBubble(JSON.parse(msg.content), { messageID: msg.messageID });
+                } catch { addMsg(msg.role, msg.content); }
                 return;
             }
             if (msg.mode === 'quiz_result') {
                 try {
                     const payload = JSON.parse(msg.content);
-                    addQuizBubble(payload.quiz, { messageID: msg.messageID, answers: payload.answers, readonly: true });
+                    addQuizBubble(payload.quiz, {
+                        messageID: msg.messageID,
+                        answers:   payload.answers,
+                        readonly:  true,
+                    });
                     addQuizResultBubble(payload.result);
                 } catch { addMsg(msg.role, msg.content); }
                 return;
             }
             addMsg(msg.role, msg.content);
         });
-
-        // Show greeting for empty sessions (new chat with no saved messages yet)
-        if (messages.length === 0) {
-            addMsg('assistant', '**Ready when you are.**\nAsk any HSC question, paste a response for band feedback, generate an exam question, or switch to Quiz mode.');
-        }
-
+ 
         renderChatHistory();
-    } catch (err) { showToast(err.message, 'error'); }
+    } catch (err) {
+        showToast(err.message, 'error');
+    }
 }
 
 async function deleteChatSession(sessionID) {

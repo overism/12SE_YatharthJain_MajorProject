@@ -172,6 +172,8 @@ def calculate_free_time_windows(
     except Exception as e:
         print(f"[SCHEDULER] Error loading events: {e}")
 
+    now_naive = datetime.now().replace(tzinfo=None)
+
     # Build timeline and find free slots
     free_slots = []
     # Strip any timezone info to keep everything naive/local
@@ -531,7 +533,30 @@ def build_gemini_schedule_prompt(
     preferred_techniques_text = ', '.join(preferred_techniques) if preferred_techniques else print("[SCHEDULER] No preferred techniques specified by user")
 
     # Build the comprehensive prompt
-    prompt = f"""You are an expert NSW HSC study planner and learning scientist.
+    prompt = f"""
+CRITICAL SCHEDULING RULES (read before anything else)
+======================================================
+1. The DATABASE TASKS and DATABASE EXAMS listed below are the
+   AUTHORITATIVE source of deadlines.  The user's free-text prompt
+   is a *hint* — if it conflicts with a DB deadline, TRUST THE DB.
+2. DO NOT schedule any study session on or after a deadline date.
+   The hard cut-off is midnight at the START of the deadline day.
+3. Each suggested timeslot must be UNIQUE — do NOT assign two
+   different subjects to the same 30-minute block.
+4. If a deadline date is already in the past, SKIP that task
+   entirely — do not create sessions for it.
+ 
+AUTHORITATIVE TASK LIST (from database)
+----------------------------------------
+{json.dumps(tasks_summary, indent=2) if tasks_summary else "None"}
+ 
+AUTHORITATIVE EXAM LIST (from database)
+----------------------------------------
+{json.dumps(exams_summary, indent=2) if exams_summary else "None"}
+
+Instructions:
+
+You are an expert NSW HSC study planner and learning scientist.
 
 CURRENT TIME: {now.strftime('%Y-%m-%d %H:%M')}
 
@@ -812,204 +837,243 @@ def generate_smart_schedule_with_gemini(
         return {'error': str(e), 'sessions': []}
 
 
+def _deadline_dt(session: Dict, user_data: Dict) -> Optional[datetime]:
+    """Return the strict latest *start* datetime for a session."""
+    explicit = _parse_dl_date(
+        session.get("deadline")
+        or session.get("due_date")
+        or session.get("exam_date")
+    )
+    if explicit:
+        return datetime.combine(explicit, datetime.min.time())
+ 
+    task_id = session.get("task_id")
+    exam_id = session.get("exam_id")
+ 
+    if task_id:
+        for task in user_data.get("tasks", []):
+            if str(task.get("id")) == str(task_id):
+                due = _parse_dl_date(task.get("due_date"))
+                if due:
+                    return datetime.combine(due, datetime.min.time())
+ 
+    if exam_id:
+        for exam in user_data.get("exams", []):
+            if str(exam.get("id")) == str(exam_id):
+                due = _parse_dl_date(exam.get("exam_date"))
+                if due:
+                    return datetime.combine(due, datetime.min.time())
+ 
+    return None
+ 
+def _parse_dl_date(value) -> Optional[date]:
+    if not value:
+        return None
+    if isinstance(value, date) and not isinstance(value, datetime):
+        return value
+    if isinstance(value, datetime):
+        return value.date()
+    try:
+        return datetime.fromisoformat(str(value)).date()
+    except Exception:
+        try:
+            return datetime.strptime(str(value), "%Y-%m-%d").date()
+        except Exception:
+            return None
+ 
+ 
+def _norm_date(value) -> Optional[str]:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value.strftime("%Y-%m-%d")
+    if isinstance(value, date):
+        return value.strftime("%Y-%m-%d")
+    text = str(value).strip()
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).strftime("%Y-%m-%d")
+    except Exception:
+        pass
+    m = re.search(r"\d{4}-\d{2}-\d{2}", text)
+    return m.group(0) if m else text
+ 
+ 
+def _coerce_minutes(value, default: int = 60) -> int:
+    if isinstance(value, (int, float)):
+        return max(15, min(240, int(value)))
+    text = str(value or "").lower()
+    nums = re.findall(r"\d+(?:\.\d+)?", text)
+    if not nums:
+        return default
+    n = float(nums[0])
+    if "hour" in text or "hr" in text:
+        n *= 60
+    return max(15, min(240, int(n)))
+
 def allocate_sessions_to_slots(
     sessions_data: List[Dict],
     user_data: Dict,
     user_preferences: Dict,
-    options: Dict
+    options: Dict,
 ) -> List[Dict]:
     """
-    Allocate generated study sessions to available free slots.
-
-    FIXES:
-    1. Removes undefined variables (start_dt, deadline_dt) that were causing
-       allocation failures and resulting in 0 sessions.
-    2. Enforces strict deadline compliance.
-    3. Allocates sessions chronologically rather than randomly.
-    4. Allows multiple sessions inside large free windows.
-    5. Prevents overlap.
+    Allocate Gemini-generated study sessions to free calendar slots.
+ 
+    Fixes applied
+    -------------
+    * Skip any slot whose start is before *now* (prevents past events).
+    * Skip any session whose deadline has already passed.
+    * Consume each slot window exclusively — no two subjects share the
+      same 30-minute block.  A slot is split into sub-slots on every
+      allocation so subsequent sessions land in truly free time.
+    * Sessions are sorted by urgency (nearest deadline first) before
+      allocation, so the most important tasks always get slots.
     """
-
-    print(f"\n{'=' * 60}")
-    print(f"[ALLOCATOR] Allocating {len(sessions_data)} sessions to free slots")
-    print(f"{'=' * 60}")
-
+    now = datetime.now()
+ 
     free_slots = sorted(
-        user_data.get("free_slots", []),
-        key=lambda s: s["start"]
-    )
-
-    subjects = user_data.get("subjects", [])
-    subject_colour_map = user_data.get("subject_colour_map", {})
-
-    # Remaining availability inside each slot
-    working_slots = sorted(
         [
             {
                 "start": slot["start"],
-                "end": slot["end"],
+                "end":   slot["end"],
                 "duration_minutes": slot["duration_minutes"],
-                "quality": slot.get("quality", 50)
+                "quality": slot.get("quality", 50),
             }
-            for slot in free_slots
+            for slot in user_data.get("free_slots", [])
+            # ── FIX 1: ignore slots that have already started ──
+            if slot["start"] > now
         ],
-        key=lambda s: s["start"]  # chronological, not quality-first
+        key=lambda s: s["start"],
     )
-
-    allocated_sessions = []
-
-    # Sort sessions by urgency first
-    def session_priority(session):
-        deadline = deadline_datetime_for_session(session, user_data)
-        if deadline:
-            return deadline
-        return datetime.max
-
-    # Filter out any malformed items Gemini may have returned (strings, nulls, etc.)
+ 
+    subject_colour_map = user_data.get("subject_colour_map", {})
+ 
+    # ── FIX 2: urgency sort (nearest deadline first) ──────────────
+    def _session_priority(session: Dict):
+        dl = _deadline_dt(session, user_data)
+        return dl if dl else datetime.max
+ 
     sessions_data = [s for s in sessions_data if isinstance(s, dict)]
     if not sessions_data:
-        print("[ALLOCATOR] No valid session dicts after filtering — Gemini returned malformed data")
         return []
-
-    sessions_data = sorted(sessions_data, key=session_priority)
-
+ 
+    sessions_data = sorted(sessions_data, key=_session_priority)
+ 
+    allocated: List[Dict] = []
+    # working copy: list of (start, end) pairs still available
+    free_windows: List[Dict] = list(free_slots)
+ 
     for session in sessions_data:
         subject_name = session.get("subject", "General")
-        title = session.get("title", "Study Session")
-
-        duration = coerce_minutes(
-            session.get("duration_minutes", 60),
-            60
-        )
-
-        strategy = session.get("strategy", "Study")
-        reasoning = session.get("reasoning", "")
-
-        deadline_dt = deadline_datetime_for_session(
-            session,
-            user_data
-        )
-
-        colour = subject_colour_map.get(
-            subject_name.lower(),
-            DEFAULT_COLORS["default"]
-        )
-
-        found_slot = None
-        scheduled_start = None
-        scheduled_end = None
-
-        suggested_date = normalize_date_text(
-            session.get("suggested_date")
-        )
-
-        # --------------------------------------------------
-        # PASS 1: honour Gemini's suggested date if possible
-        # --------------------------------------------------
-        if suggested_date:
-            for slot in working_slots:
-
-                if slot["start"].strftime("%Y-%m-%d") != suggested_date:
-                    continue
-
-                if slot["duration_minutes"] < duration:
-                    continue
-
-                candidate_start = slot["start"]
-                candidate_end = candidate_start + timedelta(
-                    minutes=duration
-                )
-
-                if deadline_dt and candidate_end >= deadline_dt:
-                    continue
-
-                found_slot = slot
-                scheduled_start = candidate_start
-                scheduled_end = candidate_end
-                break
-
-        # --------------------------------------------------
-        # PASS 2: earliest valid slot (chronological order)
-        # --------------------------------------------------
-        if not found_slot:
-            for slot in working_slots:
-
-                if slot["duration_minutes"] < duration:
-                    continue
-
-                candidate_start = slot["start"]
-                candidate_end = candidate_start + timedelta(
-                    minutes=duration
-                )
-
-                if deadline_dt and candidate_end >= deadline_dt:
-                    continue
-
-                found_slot = slot
-                scheduled_start = candidate_start
-                scheduled_end = candidate_end
-                break
-
-        if not found_slot:
-            print(
-                f"[ALLOCATOR] No valid slot before deadline for: {title}"
-            )
+        title        = session.get("title",   "Study Session")
+        strategy     = session.get("strategy", "Study")
+        reasoning    = session.get("reasoning", "")
+        duration     = _coerce_minutes(session.get("duration_minutes", 60))
+        priority     = session.get("priority", "normal")
+        task_id      = session.get("task_id")
+        exam_id      = session.get("exam_id")
+ 
+        deadline_dt = _deadline_dt(session, user_data)
+ 
+        # ── FIX 3: skip sessions whose deadline is already past ───
+        if deadline_dt and deadline_dt <= now:
+            print(f"[ALLOCATOR] Skipping '{title}' — deadline already passed ({deadline_dt.date()})")
             continue
-
-        # --------------------------------------------------
-        # Consume only the used portion of the free slot
-        # --------------------------------------------------
-        found_slot["start"] = scheduled_end
-        found_slot["duration_minutes"] = int(
-            (found_slot["end"] - found_slot["start"]).total_seconds()
-            / 60
+ 
+        colour = subject_colour_map.get(
+            subject_name.lower(), DEFAULT_COLORS["default"]
         )
-
-        description = f"Strategy: {strategy}\n"
-
+ 
+        # Preferred date hint from Gemini
+        preferred_date = _norm_date(session.get("suggested_date"))
+ 
+        found_window = None
+        scheduled_start = None
+        scheduled_end   = None
+ 
+        # ── PASS 1: honour Gemini's suggested date ────────────────
+        for win in free_windows:
+            if win["start"] <= now:
+                continue
+            if preferred_date and win["start"].strftime("%Y-%m-%d") != preferred_date:
+                continue
+            if win["duration_minutes"] < duration:
+                continue
+            candidate_end = win["start"] + timedelta(minutes=duration)
+            if deadline_dt and candidate_end >= deadline_dt:
+                continue
+            found_window    = win
+            scheduled_start = win["start"]
+            scheduled_end   = candidate_end
+            break
+ 
+        # ── PASS 2: earliest available window ────────────────────
+        if not found_window:
+            for win in free_windows:
+                if win["start"] <= now:
+                    continue
+                if win["duration_minutes"] < duration:
+                    continue
+                candidate_end = win["start"] + timedelta(minutes=duration)
+                if deadline_dt and candidate_end >= deadline_dt:
+                    continue
+                found_window    = win
+                scheduled_start = win["start"]
+                scheduled_end   = candidate_end
+                break
+ 
+        if not found_window:
+            print(f"[ALLOCATOR] No valid slot for: {title}")
+            continue
+ 
+        # ── FIX 4: split the window, leaving remainder available ──
+        # Remove the consumed window and re-insert whatever is left.
+        free_windows.remove(found_window)
+        remainder_start    = scheduled_end
+        remainder_duration = int(
+            (found_window["end"] - remainder_start).total_seconds() / 60
+        )
+        if remainder_duration >= 30:
+            free_windows.append({
+                "start":            remainder_start,
+                "end":              found_window["end"],
+                "duration_minutes": remainder_duration,
+                "quality":          found_window.get("quality", 50),
+            })
+            # Keep list sorted chronologically
+            free_windows.sort(key=lambda w: w["start"])
+ 
+        description = f"Strategy: {strategy}"
         if reasoning:
-            description += f"Reason: {reasoning}\n"
-
-        task_id = session.get("task_id")
-        exam_id = session.get("exam_id")
-
+            description += f"\nReason: {reasoning}"
         if task_id:
-            description += f"Related Task ID: {task_id}"
-
+            description += f"\nRelated Task ID: {task_id}"
         elif exam_id:
-            description += f"Related Exam ID: {exam_id}"
-
-        allocated_sessions.append({
-            "title": title,
-            "subject": subject_name,
-            "start": scheduled_start.isoformat(),
-            "end": scheduled_end.isoformat(),
+            description += f"\nRelated Exam ID: {exam_id}"
+ 
+        allocated.append({
+            "title":            title,
+            "subject":          subject_name,
+            "start":            scheduled_start.isoformat(),
+            "end":              scheduled_end.isoformat(),
             "duration_minutes": duration,
-            "priority": session.get("priority", "normal"),
-            "strategy": strategy,
-            "reasoning": reasoning,
-            "description": description,
-            "colour": colour,
-            "type": "study",
-            "task_id": task_id,
-            "exam_id": exam_id
+            "priority":         priority,
+            "strategy":         strategy,
+            "reasoning":        reasoning,
+            "description":      description,
+            "colour":           colour,
+            "type":             "study",
+            "task_id":          task_id,
+            "exam_id":          exam_id,
         })
-
         print(
-            f"[ALLOCATOR] Allocated: {title} -> "
+            f"[ALLOCATOR] Allocated: {title} → "
             f"{scheduled_start.strftime('%Y-%m-%d %H:%M')}"
         )
-
-    allocated_sessions.sort(
-        key=lambda s: datetime.fromisoformat(s["start"])
-    )
-
-    print(
-        f"[ALLOCATOR] Successfully allocated "
-        f"{len(allocated_sessions)} sessions"
-    )
-
-    return allocated_sessions
+ 
+    allocated.sort(key=lambda s: datetime.fromisoformat(s["start"]))
+    print(f"[ALLOCATOR] Successfully allocated {len(allocated)} sessions")
+    return allocated
 
 
 def time_to_minutes(time_str: str) -> int:
