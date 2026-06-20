@@ -30,8 +30,10 @@ function showPopup(title, message, onClose = null) {
     };
 }
 
-const loginForm = document.getElementById('loginForm');
-if (loginForm) {
+function initLoginForm() {
+    const loginForm = document.getElementById('loginForm');
+    if (!loginForm) return;
+
     loginForm.addEventListener('submit', function(event) {
         event.preventDefault();
 
@@ -42,8 +44,10 @@ if (loginForm) {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // Use server-provided redirect so onboarding gate works
-                window.location.href = data.redirect_url || '/home';
+                // Use server-provided redirect so onboarding gate works only after the user closes the popup
+                showPopup('Login Successful', data.message, () => {
+                    window.location.href = data.redirect_url || '/home';
+                });
             } else {
                 const errEl = document.getElementById('loginError');
                 if (errEl) errEl.textContent = data.message;
@@ -55,6 +59,8 @@ if (loginForm) {
         });
     });
 }
+
+document.addEventListener('DOMContentLoaded', initLoginForm);
 
 document.querySelectorAll('.game-card').forEach(card => {
   card.addEventListener('click', () => {
@@ -933,7 +939,6 @@ function collectSchedulerPreferences() {
         school_end:          Number(document.getElementById('schoolEndTime')?.value   || 15),
         max_daily_hours:     Number(document.getElementById('maxDailyStudy')?.value   || 4),
         session_duration:    Number(document.getElementById('sessionDuration')?.value || 60),
-        break_duration:      Number(document.getElementById('breakDuration')?.value   || 10),
         priority_subjects:   Array.from(prefsState.selected),
         study_techniques:    prefsState.techniques && prefsState.techniques.size > 0
                                  ? Array.from(prefsState.techniques).map(k => {
@@ -956,7 +961,6 @@ function populateSchedulerPrefs(scheduler) {
         schoolEndTime: values.school_end ?? 15,
         maxDailyStudy: values.max_daily_hours ?? 4,
         sessionDuration: values.session_duration ?? 60,
-        breakDuration: values.break_duration ?? 10
     };
     Object.entries(map).forEach(([id, value]) => {
         const el = document.getElementById(id);
@@ -1046,7 +1050,7 @@ function ensurePrefsModal() {
 
 function ensureSchedulerFields() {
     const grid = document.getElementById('schedulePrefsGrid') || document.querySelector('.schedule-prefs-grid');
-    if (!grid || document.getElementById('breakDuration')) return;
+    if (!grid || document.getElementById('sessionDuration')) return;
     grid.innerHTML = `
         <div class="schedule-pref-item"><label class="schedule-pref-label">Study Start Time</label><select id="studyStartTime" class="schedule-pref-select">${hourOptions(6, 10, 8)}</select></div>
         <div class="schedule-pref-item"><label class="schedule-pref-label">Study End Time</label><select id="studyEndTime" class="schedule-pref-select">${hourOptions(20, 23, 22)}</select></div>
@@ -1056,7 +1060,6 @@ function ensureSchedulerFields() {
         <div class="schedule-pref-item"><label class="schedule-pref-label">School End</label><select id="schoolEndTime" class="schedule-pref-select">${hourOptions(14, 17, 15)}</select></div>
         <div class="schedule-pref-item"><label class="schedule-pref-label">Max Daily Study</label><select id="maxDailyStudy" class="schedule-pref-select">${numberOptions(2, 6, 4, ' hours')}</select></div>
         <div class="schedule-pref-item"><label class="schedule-pref-label">Default Session</label><select id="sessionDuration" class="schedule-pref-select">${minuteOptions([30,45,60,90,120], 60)}</select></div>
-        <div class="schedule-pref-item"><label class="schedule-pref-label">Break Length</label><select id="breakDuration" class="schedule-pref-select">${minuteOptions([0,5,10,15,20], 10)}</select></div>
     `;
 }
 

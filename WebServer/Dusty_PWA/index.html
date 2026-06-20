@@ -7,6 +7,9 @@
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link rel="icon" href="{{ url_for('static', filename='images/mainicon.png') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   </head>
   <body class="landing-body">
     <div class="intro-screen" id="intro-screen" aria-hidden="true">
@@ -33,6 +36,20 @@
       </header>
 
       <main>
+        <!-- Ambient Light Effects -->
+        <div class="ambient-light ambient-light-1" aria-hidden="true"></div>
+        <div class="ambient-light ambient-light-2" aria-hidden="true"></div>
+        <div class="ambient-light ambient-light-3" aria-hidden="true"></div>
+
+        <!-- 3D Grid Background -->
+        <div class="grid-3d" aria-hidden="true">
+          <div class="grid-line"></div>
+          <div class="grid-line"></div>
+          <div class="grid-line"></div>
+          <div class="grid-line"></div>
+          <div class="grid-line"></div>
+        </div>
+
         <section class="hero-section">
           <div class="hero-copy">
             <p class="eyebrow">Study workflows, but actually calm</p>
@@ -53,23 +70,24 @@
           </div>
 
           <div class="hero-stage" aria-hidden="true">
-            <div class="floating-card floating-card-left">
+            <div class="floating-card floating-card-left card-3d" data-tilt>
               <span class="card-label">Plan</span>
               <strong>Task breakdowns</strong>
               <p>Break a giant subject into manageable sessions.</p>
             </div>
-            <div class="floating-card floating-card-center">
+            <div class="floating-card floating-card-center card-3d" data-tilt>
               <span class="card-label">Focus</span>
               <strong>Dust-free dashboard</strong>
               <p>Only the next useful action stays in view.</p>
             </div>
-            <div class="floating-card floating-card-right">
+            <div class="floating-card floating-card-right card-3d" data-tilt>
               <span class="card-label">Recall</span>
               <strong>Quick revision loops</strong>
               <p>Return to the right notes at the right time.</p>
             </div>
             <div class="hero-orbit hero-orbit-one"></div>
             <div class="hero-orbit hero-orbit-two"></div>
+            <div class="hero-glow"></div>
           </div>
         </section>
 
@@ -94,7 +112,7 @@
                 </div>
 
                 <div class="book-pages" id="book-pages">
-                  <article class="book-page page-one">
+                  <article class="book-page page-one card-3d" data-tilt>
                     <div class="page-content">
                       <p class="page-number">01</p>
                       <h3>Collect everything in one clean workspace.</h3>
@@ -105,7 +123,7 @@
                     </div>
                   </article>
 
-                  <article class="book-page page-two">
+                  <article class="book-page page-two card-3d" data-tilt>
                     <div class="page-content">
                       <p class="page-number">02</p>
                       <h3>See what matters now instead of everything at once.</h3>
@@ -116,7 +134,7 @@
                     </div>
                   </article>
 
-                  <article class="book-page page-three">
+                  <article class="book-page page-three card-3d" data-tilt>
                     <div class="page-content">
                       <p class="page-number">03</p>
                       <h3>Turn revision into a repeatable rhythm.</h3>
@@ -126,7 +144,7 @@
                     </div>
                   </article>
 
-                  <article class="book-page page-four">
+                  <article class="book-page page-four card-3d" data-tilt>
                     <div class="page-content">
                       <p class="page-number">04</p>
                       <h3>End on momentum, not overwhelm.</h3>
@@ -206,6 +224,58 @@
         });
       }
 
+      // 3D Card Tilt Effect
+      function initCardTilt() {
+        const cards = document.querySelectorAll('[data-tilt]');
+        if (!cards.length) return;
+
+        cards.forEach(card => {
+          card.addEventListener('mousemove', handleTilt);
+          card.addEventListener('mouseleave', resetTilt);
+        });
+      }
+
+      function handleTilt(e) {
+        const card = e.currentTarget;
+        const rect = card.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const centerX = rect.width / 2;
+        const centerY = rect.height / 2;
+
+        const rotateX = (y - centerY) / 15;
+        const rotateY = (centerX - x) / 15;
+
+        card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateZ(15px)`;
+        card.style.transition = 'transform 0.15s ease-out';
+      }
+
+      function resetTilt(e) {
+        const card = e.currentTarget;
+        card.style.transform = '';
+        card.style.transition = 'transform 0.3s ease';
+      }
+
+      // Parallax scroll effect
+      function initParallax() {
+        const ambientLights = document.querySelectorAll('.ambient-light');
+        const gridLines = document.querySelectorAll('.grid-line');
+
+        window.addEventListener('scroll', () => {
+          const scrolled = window.pageYOffset;
+
+          ambientLights.forEach((light, i) => {
+            const speed = 0.1 + (i * 0.05);
+            light.style.transform = `translateY(${scrolled * speed}px)`;
+          });
+
+          gridLines.forEach((line, i) => {
+            const speed = 0.05 + (i * 0.02);
+            line.style.transform = `translateX(${-scrolled * speed}px) rotateY(${i * 30}deg)`;
+          });
+        }, { passive: true });
+      }
+
       if (prefersReducedMotion) {
         if (introLogo) {
           introLogo.classList.add('is-visible');
@@ -219,6 +289,14 @@
         }, 3500);
         window.setTimeout(finishIntro, 6000);
       }
+
+      // Initialize 3D effects after intro
+      window.addEventListener('load', () => {
+        setTimeout(() => {
+          initCardTilt();
+          initParallax();
+        }, 6500);
+      });
 
       updateBookAnimation();
       document.addEventListener('scroll', updateBookAnimation, { passive: true });

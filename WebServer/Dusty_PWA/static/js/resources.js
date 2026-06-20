@@ -325,7 +325,7 @@ function renderUploadsContent(lib) {
                 <div class="upload-file-name">${escHtml(f.name)}</div>
                 <div class="upload-file-meta"><span class="tree-file-ext ${extClass(ext)}" style="display:inline-block">${ext || 'file'}</span></div>
                 <div class="upload-file-actions">
-                    <a class="upload-open-btn" href="${escHtml(href)}" target="_blank" rel="noopener noreferrer">Open</a>
+                    <a class="upload-open-btn" href="${escHtml(href)}" target="_blank" rel="noopener noreferrer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="15" height="15" style="flex-shrink:0;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Open</a>
                     <button class="upload-del-btn" onclick="deleteUpload('${escHtml(f.name)}')" type="button">Delete</button>
                 </div>
             </div>`;
@@ -360,7 +360,7 @@ function buildGridHtml(nodes, sourceKey) {
                     <div class="file-card-name">${escHtml(node.name)}</div>
                     <span class="file-card-ext ${extClass(ext)}">${ext || 'file'}</span>
                     <div class="file-card-actions">
-                        <span class="file-action-btn btn-view">Open</span>
+                        <span class="file-action-btn btn-view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" width="15" height="15" style="flex-shrink:0;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>Open</span>
                     </div>
                 </a>`;
             }
@@ -386,7 +386,7 @@ function renderBreadcrumb() {
     const el  = document.getElementById('breadcrumb');
     if (!el)  return;
     const lib = RS.libraries[RS.activeLibIdx];
-    let html  = `<a onclick="goHome()" style="cursor:pointer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>${escHtml(lib?.title || 'Library')}</a>`;
+    let html  = `<a onclick="goHome()" style="cursor:pointer"><img src="/static/images/folder-icon.svg" alt="Library" style="width:20px;height:20px;display:inline;vertical-align:middle;margin-right:4px">${escHtml(lib?.title || 'Library')}</a>`;
     RS.currentPath.forEach((crumb, i) => {
         html += `<span class="breadcrumb-sep">/</span>`;
         if (i === RS.currentPath.length - 1) {
@@ -523,7 +523,7 @@ function renderUploadQueue() {
             </div>
             <span class="upload-qi-status ${item.status}">${statusLabel}${item.error ? ': ' + escHtml(item.error) : ''}</span>
             ${item.status === 'pending'
-                ? `<button class="upload-qi-remove" onclick="removeFromQueue(${idx})" type="button" aria-label="Remove from queue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>`
+                ? `<button class="upload-qi-remove" onclick="removeFromQueue(${idx})" type="button" aria-label="Remove from queue"><img src="/static/images/cross-brown-icon.svg" alt="Remove" class="btn-icon-xs"></button>`
                 : ''}
         </div>`;
     }).join('');

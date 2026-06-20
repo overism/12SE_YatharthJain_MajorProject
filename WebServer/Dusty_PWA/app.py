@@ -1,3 +1,4 @@
+from ast import Return
 import os
 
 os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
@@ -18,6 +19,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from datetime import datetime, timedelta
 import scheduler
+import secrets
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 GOOGLE_SCOPES = ['https://www.googleapis.com/auth/calendar']
@@ -29,13 +31,16 @@ ALLOWED_UPLOAD_EXTENSIONS = {
     'pdf', 'docx', 'doc', 'pptx', 'ppt',
     'txt', 'md', 'png', 'jpg', 'jpeg',
 }
+AMBIENCE_DIR           = os.path.join(basedir, 'data', 'user_uploads', 'timer_ambience')
+ALLOWED_AMBIENCE_BG    = {'jpg', 'jpeg', 'png', 'gif', 'webp', 'mp4', 'webm'}
+ALLOWED_AMBIENCE_SOUND = {'mp3', 'wav', 'ogg', 'm4a', 'opus'}
 
 app = Flask(
     __name__,
     template_folder = basedir,
     static_folder = os.path.join(basedir, 'static')
 )
-app.secret_key = os.getenv('SECRET_KEY', 'dusty-dev-secret-key-change-this')
+app.secret_key = secrets.token_hex(32)
 CORS(app)
 
 @app.context_processor
@@ -127,11 +132,10 @@ DEFAULT_SCHEDULER_SETTINGS = {
     'school_start': 9,
     'school_end': 15,
     'session_duration': 60,
-    'break_duration': 10,
     'max_daily_hours': 4,
     'priority_subjects': [],
     'scheduler_onboarded': False,
-    'study_techniques': ["Spaced Reptition", "Active Recall", "Blurting", "Stop Light Method", "Interleaving", "Retrieval Practice", "Exam Style Questions", "Error Analysis", "Worked Examples", "Past Paper Practice"]
+    'study_techniques': []
 }
 
 
@@ -171,7 +175,6 @@ def _scheduler_settings_from(settings):
         'school_start': _coerce_int(settings.get('school_start'), 9, 0, 23),
         'school_end': _coerce_int(settings.get('school_end'), 15, 1, 24),
         'session_duration': _coerce_int(settings.get('session_duration'), 60, 20, 180),
-        'break_duration': _coerce_int(settings.get('break_duration'), 10, 0, 60),
         'max_daily_hours': _coerce_int(settings.get('max_daily_hours'), 4, 1, 10),
         'priority_subjects': settings.get('priority_subjects')
             if isinstance(settings.get('priority_subjects'), list)
@@ -188,7 +191,7 @@ def _scheduler_onboarding_complete(settings):
     required_keys = (
         'study_start', 'study_end', 'sleep_start', 'sleep_end',
         'school_start', 'school_end', 'session_duration',
-        'break_duration', 'max_daily_hours', 'study_techniques'
+        'max_daily_hours', 'study_techniques'
     )
     return bool(settings.get('scheduler_onboarded')) and all(key in settings for key in required_keys)
 
@@ -361,18 +364,32 @@ def login_validation():
 
     return jsonify({
         "success":      True,
-        "message":      "Login successful!",
+        "message":      "You have logged in successfully.",
         "redirect_url": redirect_url
     }), 200
 
 @app.route('/add_user', methods=['POST'])
 def add_user():
+    import re
     email    = request.form.get('email', '').strip()
     username = request.form.get('username', '').strip()
     password = request.form.get('password', '').strip()
 
     if not email or not username or not password:
         return redirect(url_for('signup') + '?error=missing_fields')
+
+    # Validate email format
+    email_regex = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
+    if not re.match(email_regex, email):
+        return redirect(url_for('signup') + '?error=invalid_email')
+
+    # Validate username length
+    if len(username) < 3:
+        return redirect(url_for('signup') + '?error=invalid_username')
+
+    # Validate password length
+    if len(password) < 8:
+        return redirect(url_for('signup') + '?error=weak_password')
 
     conn = get_db_connection()
     existing = conn.execute(
@@ -594,7 +611,6 @@ def api_user_preferences():
                 'school_start': _coerce_int(scheduler_data.get('school_start'), 9, 0, 23),
                 'school_end': _coerce_int(scheduler_data.get('school_end'), 15, 1, 24),
                 'session_duration': _coerce_int(scheduler_data.get('session_duration'), 60, 20, 180),
-                'break_duration': _coerce_int(scheduler_data.get('break_duration'), 10, 0, 60),
                 'max_daily_hours': _coerce_int(scheduler_data.get('max_daily_hours'), 4, 1, 10),
                 'priority_subjects': (
                     scheduler_data.get('priority_subjects')
@@ -1295,12 +1311,47 @@ def update_task():
 
         conn.commit()
         conn.close()
-        
+
         return jsonify({'status': 'updated'}), 200
     except sqlite3.Error as e:
         print(f"[UPDATE_TASK] Could not update task: {e}")
         return jsonify({'error': 'Could not update task'}), 500
 
+
+@app.route('/delete_task', methods=['POST'])
+@login_required
+def delete_task():
+    """Mark a task as complete and delete it from the database."""
+    user_id = session.get('user_id')
+    data = request.get_json() or {}
+
+    task_id = data.get('taskID')
+
+    if not task_id:
+        return jsonify({'error': 'Missing task ID'}), 400
+
+    try:
+        conn = get_db_connection()
+
+        # Verify task ownership before deleting
+        task = conn.execute(
+            'SELECT taskID FROM tasks WHERE taskID = ? AND userID = ?',
+            (task_id, user_id)
+        ).fetchone()
+
+        if not task:
+            conn.close()
+            return jsonify({'error': 'Task not found'}), 404
+
+        # Delete the task from database
+        conn.execute('DELETE FROM tasks WHERE taskID = ? AND userID = ?', (task_id, user_id))
+        conn.commit()
+        conn.close()
+
+        return jsonify({'status': 'deleted'}), 200
+    except sqlite3.Error as e:
+        print(f"[DELETE_TASK] Could not delete task: {e}")
+        return jsonify({'error': 'Could not delete task'}), 500
 
 
 @app.route('/timer')
@@ -1356,6 +1407,11 @@ def upload_avatar():
 
     if not file:
         return jsonify({'error': 'No file provided'}), 400
+
+    # Validate MIME type (more secure than just extension)
+    allowed_mime_types = {'image/png', 'image/jpeg', 'image/jpg', 'image/gif'}
+    if file.content_type not in allowed_mime_types:
+        return jsonify({'error': 'File type not allowed. Use PNG, JPG, or GIF.'}), 400
 
     if not allowed_file(file.filename):
         return jsonify({'error': 'File type not allowed. Use PNG, JPG, GIF.'}), 400
@@ -1494,18 +1550,34 @@ def google_event_body(title, description, start_time, end_time):
     }
 
 def check_overlap(start_time, end_time, user_id, exclude_event_id=None):
-    """Check if a time slot overlaps with existing events."""
+    """
+    Return True if [start_time, end_time) overlaps any non-deleted event
+    owned by user_id (excluding exclude_event_id when supplied).
+
+    Normalises both the incoming times and the stored times through
+    parse_calendar_dt so that timezone suffixes, 'Z', and space-separated
+    datetime strings are all handled consistently.
+    """
+    try:
+        s = parse_calendar_dt(str(start_time))
+        e = parse_calendar_dt(str(end_time))
+        if s is None or e is None:
+            return False
+        start_str = s.isoformat()
+        end_str   = e.isoformat()
+    except Exception:
+        return False
+
     conn = get_db_connection()
     query = """
-        SELECT COUNT(*) as count
+        SELECT COUNT(*) AS count
         FROM events
-        WHERE userID = ?
-        AND isDeleted = 0
-        AND startTime < ?
-        AND endTime > ?
+        WHERE userID    = ?
+          AND isDeleted = 0
+          AND startTime < ?
+          AND endTime   > ?
     """
-
-    params = [user_id, end_time, start_time]
+    params = [user_id, end_str, start_str]
 
     if exclude_event_id is not None:
         query += " AND eventID != ?"
@@ -1513,8 +1585,7 @@ def check_overlap(start_time, end_time, user_id, exclude_event_id=None):
 
     result = conn.execute(query, params).fetchone()
     conn.close()
-
-    return result['count'] > 0
+    return result["count"] > 0
 
 def round_up_to_interval(dt, interval_minutes=15):
     """Round datetime up to nearest interval."""
@@ -2107,7 +2178,7 @@ def smart_generate_schedule():
         request_preferences = data.get('preferences') or {}
         if isinstance(request_preferences, dict):
             for key in ('study_start', 'study_end', 'sleep_start', 'sleep_end', 'school_start',
-                        'school_end', 'session_duration', 'break_duration', 'max_daily_hours'):
+                        'school_end', 'session_duration', 'max_daily_hours'):
                 if key in request_preferences:
                     user_preferences[key] = _coerce_int(request_preferences.get(key), user_preferences.get(key))
             if isinstance(request_preferences.get('priority_subjects'), list):
@@ -2118,9 +2189,7 @@ def smart_generate_schedule():
         # Build options
         options = {
             'max_daily_hours': user_preferences.get('max_daily_hours', 4),
-            'session_duration': user_preferences.get('session_duration', 60),
-            'break_duration': user_preferences.get('break_duration', 10),
-            'include_breaks': True,
+            'session_duration': user_preferences.get('session_duration', 60)
         }
         if isinstance(data.get('options'), dict):
             options.update(data.get('options'))
@@ -2314,9 +2383,6 @@ def save_generated_schedule():
             print(f"[GOOGLE SERVICE ERROR] {e} - continuing without Google sync")
 
         for sesh in sessions:
-            if sesh.get('type') == 'break':
-                continue
-
             if not isinstance(sesh, dict):
                 continue
 
@@ -2734,12 +2800,18 @@ def sync_google_calendar():
                     continue
 
                 start = event['start'].get('dateTime', event['start'].get('date'))
-                end = event['end'].get('dateTime', event['end'].get('date'))
+                end   = event['end'].get('dateTime',   event['end'].get('date'))
 
+                # Google all-day events use an EXCLUSIVE end date
+                # (Jun 15 event → end.date = Jun 16).
+                # Convert to inclusive so FullCalendar renders one day
+                # and the overlap checker doesn't block the following day.
                 if 'T' not in start:
                     start += 'T00:00:00'
                 if 'T' not in end:
-                    end += 'T23:59:59'
+                    import datetime as _dt_mod
+                    _end_d = _dt_mod.datetime.strptime(end, '%Y-%m-%d') - _dt_mod.timedelta(days=1)
+                    end = _end_d.strftime('%Y-%m-%dT23:59:59')
 
                 existing = conn.execute("""
                     SELECT eventID FROM events
@@ -2747,21 +2819,44 @@ def sync_google_calendar():
                 """, (user_id, google_event_id)).fetchone()
 
                 if existing:
-                    conn.execute("""
-                        UPDATE events
-                        SET title = ?, description = ?, startTime = ?, endTime = ?,
-                            source = 'google', color = ?, isDeleted = 0,
-                            updatedAt = CURRENT_TIMESTAMP, lastSynced = CURRENT_TIMESTAMP
-                        WHERE eventID = ?
-                    """, (
-                        event.get('summary', 'Untitled Event'),
-                        event.get('description', ''),
-                        start,
-                        end,
-                        get_event_color('google'),
-                        existing['eventID']
-                    ))
-                    event_id = existing['eventID']
+                    # Never overwrite colour/source for auto-generated
+                    # study-session events — they should stay green.
+                    _existing_meta = conn.execute(
+                        "SELECT source, color FROM events WHERE eventID = ?",
+                        (existing["eventID"],)
+                    ).fetchone()
+                    _is_auto = _existing_meta and _existing_meta["source"] == "auto"
+
+                    if _is_auto:
+                        conn.execute("""
+                            UPDATE events
+                            SET title = ?, description = ?, startTime = ?, endTime = ?,
+                                isDeleted = 0,
+                                updatedAt = CURRENT_TIMESTAMP, lastSynced = CURRENT_TIMESTAMP
+                            WHERE eventID = ?
+                        """, (
+                            event.get("summary", "Untitled Event"),
+                            event.get("description", ""),
+                            start,
+                            end,
+                            existing["eventID"]
+                        ))
+                    else:
+                        conn.execute("""
+                            UPDATE events
+                            SET title = ?, description = ?, startTime = ?, endTime = ?,
+                                source = 'google', color = ?, isDeleted = 0,
+                                updatedAt = CURRENT_TIMESTAMP, lastSynced = CURRENT_TIMESTAMP
+                            WHERE eventID = ?
+                        """, (
+                            event.get("summary", "Untitled Event"),
+                            event.get("description", ""),
+                            start,
+                            end,
+                            get_event_color("google"),
+                            existing["eventID"]
+                        ))
+                    event_id = existing["eventID"]
                     updated_count += 1
                 else:
                     cursor = conn.cursor()
@@ -3148,19 +3243,6 @@ def get_resources():
         libraries = []
         from RAG.paths import SUBJECT_RESOURCE_DIRS, CHAT_DATABASE_SUBJECT_DIRS
 
-        # ── Syllabus resource library ──
-        resource_library = {
-            'title': 'Resource Library',
-            'source_key': 'resources',
-            'subjects': [],
-        }
-        for subject_name, subject_dir in SUBJECT_RESOURCE_DIRS.items():
-            if os.path.isdir(subject_dir):
-                resource_library['subjects'].append({
-                    'name': subject_name,
-                    'tree': _build_directory_tree(subject_dir),
-                })
-
         # ── Chat-DB library ──
         chat_db_library = {
             'title': 'Chat Database',
@@ -3174,8 +3256,6 @@ def get_resources():
                     'tree': _build_directory_tree(subject_dir),
                 })
 
-        if resource_library['subjects']:
-            libraries.append(resource_library)
         if chat_db_library['subjects']:
             libraries.append(chat_db_library)
 
@@ -4449,6 +4529,187 @@ def api_status():
     except Exception as exc:
         print(f"[STATUS] {exc}")
         return jsonify({"error": str(exc), "chunks_in_database": 0}), 500
+
+# timer ambience upload and management routes
+
+def _ambience_dir(user_id, category):
+    """Return (and create) the per-user ambience sub-directory."""
+    d = os.path.join(AMBIENCE_DIR, str(user_id), category)
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
+@app.route('/api/timer/ambience/upload', methods=['POST'])
+@login_required
+def upload_ambience():
+    """Upload a custom background or sound for the ambient timer."""
+    user_id  = session.get('user_id')
+    file     = request.files.get('file')
+    category = request.form.get('category', 'background')   # 'background' | 'sound'
+
+    if not file or not file.filename:
+        return jsonify({'error': 'No file provided'}), 400
+
+    ext = file.filename.rsplit('.', 1)[-1].lower() if '.' in file.filename else ''
+
+    if category == 'background':
+        if ext not in ALLOWED_AMBIENCE_BG:
+            return jsonify({'error': f'File type .{ext} is not allowed for backgrounds'}), 400
+        max_bytes = 40 * 1024 * 1024   # 40 MB
+        media_type = 'video' if ext in {'mp4', 'webm'} else 'image'
+    elif category == 'sound':
+        if ext not in ALLOWED_AMBIENCE_SOUND:
+            return jsonify({'error': f'File type .{ext} is not allowed for sounds'}), 400
+        max_bytes  = 20 * 1024 * 1024  # 20 MB
+        media_type = 'audio'
+    else:
+        return jsonify({'error': 'Invalid category'}), 400
+
+    # Read and size-check
+    data = file.read()
+    if len(data) > max_bytes:
+        return jsonify({'error': f'File exceeds {max_bytes // (1024*1024)} MB limit'}), 400
+
+    target_dir = _ambience_dir(user_id, category)
+    base_name  = secure_filename(file.filename)
+    name, dext = os.path.splitext(base_name)
+    ts         = int(datetime.now().timestamp())
+    safe_name  = f"{name}_{ts}{dext}"
+    filepath   = os.path.join(target_dir, safe_name)
+
+    with open(filepath, 'wb') as fh:
+        fh.write(data)
+
+    return jsonify({
+        'success':    True,
+        'id':         safe_name,
+        'filename':   safe_name,
+        'media_type': media_type,
+        'category':   category,
+        'url':        f'/api/timer/ambience/serve/{category}/{safe_name}',
+    }), 201
+
+
+@app.route('/api/timer/ambience/uploads', methods=['GET'])
+@login_required
+def list_ambience_uploads():
+    """List all custom backgrounds and sounds for the current user."""
+    user_id     = session.get('user_id')
+    backgrounds = []
+    sounds      = []
+
+    bg_dir = os.path.join(AMBIENCE_DIR, str(user_id), 'background')
+    if os.path.isdir(bg_dir):
+        for fn in sorted(os.listdir(bg_dir)):
+            if fn.startswith('.'):
+                continue
+            ext  = fn.rsplit('.', 1)[-1].lower() if '.' in fn else ''
+            mtype = 'video' if ext in {'mp4', 'webm'} else 'image'
+            backgrounds.append({
+                'id':    fn,
+                'label': os.path.splitext(fn)[0].replace('_', ' '),
+                'type':  mtype,
+                'value': f'/api/timer/ambience/serve/background/{fn}',
+            })
+
+    snd_dir = os.path.join(AMBIENCE_DIR, str(user_id), 'sound')
+    if os.path.isdir(snd_dir):
+        for fn in sorted(os.listdir(snd_dir)):
+            if fn.startswith('.'):
+                continue
+            sounds.append({
+                'id':    fn,
+                'label': os.path.splitext(fn)[0].replace('_', ' '),
+                'icon':  '🎵',
+                'src':   f'/api/timer/ambience/serve/sound/{fn}',
+            })
+
+    return jsonify({'backgrounds': backgrounds, 'sounds': sounds})
+
+
+@app.route('/api/timer/ambience/serve/<category>/<path:filename>')
+@login_required
+def serve_ambience(category, filename):
+    """Serve a user-uploaded ambience file securely."""
+    user_id   = session.get('user_id')
+    safe_fn   = secure_filename(filename)
+    serve_dir = os.path.join(AMBIENCE_DIR, str(user_id), category)
+    resolved  = _safe_join(serve_dir, safe_fn)
+
+    if not resolved or not os.path.isfile(resolved):
+        abort(404)
+
+    return send_from_directory(serve_dir, safe_fn)
+
+
+@app.route('/api/timer/ambience/upload', methods=['DELETE'])
+@login_required
+def delete_ambience():
+    """Delete a user-uploaded ambience file."""
+    user_id  = session.get('user_id')
+    file_id  = request.args.get('id')
+    category = request.args.get('category', 'background')
+
+    if not file_id:
+        return jsonify({'error': 'Missing id parameter'}), 400
+
+    safe_fn  = secure_filename(file_id)
+    serve_dir = os.path.join(AMBIENCE_DIR, str(user_id), category)
+    resolved  = _safe_join(serve_dir, safe_fn)
+
+    if not resolved or not os.path.isfile(resolved):
+        return jsonify({'error': 'File not found'}), 404
+
+    os.remove(resolved)
+    return jsonify({'success': True})
+
+
+@app.route('/api/timer/ambience/prefs', methods=['POST'])
+@login_required
+def save_ambience_prefs():
+    """
+    Persist ambience preferences (background + active sounds) server-side
+    so they survive across devices.  Stored as a JSON blob in userSettings.
+    """
+    user_id = session.get('user_id')
+    data    = request.get_json() or {}
+
+    # Strip any obviously oversized values before storing
+    safe = {
+        'bgId':    str(data.get('bgId',    ''))[:120],
+        'bgType':  str(data.get('bgType',  ''))[:20],
+        'bgValue': str(data.get('bgValue', ''))[:300],
+        'sounds':  data.get('sounds', {}) if isinstance(data.get('sounds'), dict) else {},
+    }
+
+    try:
+        conn     = get_db_connection()
+        existing = conn.execute('SELECT userSettings FROM users WHERE userID = ?', (user_id,)).fetchone()
+        prefs    = _load_user_settings(existing['userSettings'] if existing else None)
+        prefs['timer_ambience'] = safe
+        conn.execute('UPDATE users SET userSettings = ? WHERE userID = ?', (json.dumps(prefs), user_id))
+        conn.commit()
+        conn.close()
+        return jsonify({'success': True})
+    except Exception as exc:
+        print(f'[AMBIENCE_PREFS] {exc}')
+        return jsonify({'error': 'Could not save preferences'}), 500
+
+
+@app.route('/api/timer/ambience/prefs', methods=['GET'])
+@login_required
+def get_ambience_prefs():
+    """Return saved ambience preferences for the current user."""
+    user_id = session.get('user_id')
+    try:
+        conn     = get_db_connection()
+        existing = conn.execute('SELECT userSettings FROM users WHERE userID = ?', (user_id,)).fetchone()
+        conn.close()
+        prefs    = _load_user_settings(existing['userSettings'] if existing else None)
+        return jsonify(prefs.get('timer_ambience', {}))
+    except Exception as exc:
+        print(f'[AMBIENCE_PREFS_GET] {exc}')
+        return jsonify({}), 500
 
 # SPA fallback -> index
 @app.errorhandler(404)

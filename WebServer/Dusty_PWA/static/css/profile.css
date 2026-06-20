@@ -264,6 +264,7 @@ html, body {
     transition: all .2s; background: rgba(245,118,28,.02);
 }
 .file-drop:hover { border-color: #f5761c; background: rgba(245,118,28,.05); }
+.file-drop.drag-over { border-color: #f5761c; background: rgba(245,118,28, .15); transform: scale(1.02); }
 .file-drop input { display: none; }
 .file-drop-icon { font-size: 32px; margin-bottom: 8px; }
 .file-drop p { font-size: 14px; color: #888; margin: 0; }

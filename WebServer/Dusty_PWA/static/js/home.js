@@ -186,7 +186,14 @@ function renderTimerFromShared() {
 
         display.textContent = DustyStudyTimer.formatTime(state.remainingSeconds);
         if (subPill) subPill.textContent = state.currentSubjectName || 'No subject';
-        if (playBtn) playBtn.textContent = state.isRunning ? '⏸' : '▶';
+        if (playBtn) {
+            const icon = playBtn.querySelector('img');
+            if (icon) {
+                icon.src = state.isRunning
+                    ? "/static/images/pause-icon.svg"
+                    : "/static/images/play-icon.svg";
+            }
+        }
 
         if (arc) {
             const total = Number(state.totalSeconds) || 3600;
@@ -208,6 +215,10 @@ function dashTimerToggle() {
 function dashTimerReset() {
     if (!window.DustyStudyTimer) return;
     DustyStudyTimer.resetTimer(true);
+}
+
+function goToTimer() {
+    window.location.href = '/timer';
 }
 
 /* ── SEARCH ── */

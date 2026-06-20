@@ -7,6 +7,8 @@
     <title>Resources - Dusty</title>
     <link rel="icon" href="{{ url_for('static', filename='images/mainicon.png') }}">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/resources.css') }}">
     <script defer src="{{ url_for('static', filename='js/subject-colours.js') }}"></script>
@@ -76,7 +78,7 @@
             <!-- Breadcrumb -->
             <div class="breadcrumb" id="breadcrumb">
                 <a onclick="goHome()" style="cursor:pointer">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:14px;height:14px;display:inline;vertical-align:middle;margin-right:4px" aria-hidden="true"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    <img src="{{ url_for('static', filename='images/folder-icon.svg') }}" alt="Library" style="width:20px;height:20px;display:inline;vertical-align:middle;margin-right:4px">
                     Library
                 </a>
             </div>
@@ -96,7 +98,7 @@
         <div class="upload-modal-header">
             <h2 class="upload-modal-title" id="uploadModalTitle">Upload Resource</h2>
             <button class="upload-modal-close" onclick="closeUploadModal()" type="button" aria-label="Close upload modal">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                <img src="{{ url_for('static', filename='images/cross-brown-icon.svg') }}" alt="Close" class="btn-icon-sm">
             </button>
         </div>
 
@@ -114,7 +116,7 @@
                    accept=".pdf,.docx,.doc,.pptx,.ppt,.txt,.md,.png,.jpg,.jpeg"
                    style="display:none" onchange="handleUploadFiles(this.files)" aria-label="Select files to upload">
             <div class="upload-dropzone-icon">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                <img src="{{ url_for('static', filename='images/upload-icon.svg') }}" alt="Upload" class="upload-icon-img">
             </div>
             <p class="upload-dropzone-title">Drop files here or click to browse</p>
             <p class="upload-dropzone-sub">PDF, DOCX, PPTX, TXT, MD, PNG, JPG — max 10 MB per file</p>

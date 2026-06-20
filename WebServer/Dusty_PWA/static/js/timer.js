@@ -449,7 +449,7 @@ function applyBackground(bg) {
 async function handleBgUpload(input) {
     const file = input.files[0];
     if (!file) return;
-    const maxMB = 20;
+    const maxMB = 40;
     if (file.size > maxMB * 1024 * 1024) { showNotification(`Max ${maxMB} MB for backgrounds`, 'error'); input.value = ''; return; }
 
     const fd = new FormData();
@@ -508,7 +508,7 @@ function makeSoundItem(s, canRemove = false) {
         <button class="sound-toggle" type="button" aria-label="${node.active ? 'Pause' : 'Play'} ${s.label}">
             ${node.active ? pauseIcon() : playIcon()}
         </button>
-        ${canRemove ? `<button class="sound-remove" type="button" title="Remove">×</button>` : ''}`;
+        ${canRemove ? `<button class="sound-remove" type="button" title="Remove">X</button>` : ''}`;
 
     item.querySelector('.sound-toggle').addEventListener('click', () => toggleSound(s));
     item.querySelector('.sound-volume').addEventListener('input', e => setVolume(s.id, parseFloat(e.target.value)));
@@ -517,8 +517,8 @@ function makeSoundItem(s, canRemove = false) {
     return item;
 }
 
-function playIcon()  { return '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>'; }
-function pauseIcon() { return '<svg viewBox="0 0 24 24" fill="currentColor"><path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/></svg>'; }
+function playIcon()  { return '<img src="/static/images/play-icon.svg" alt="Play" width="16" height="16">'; }
+function pauseIcon() { return '<img src="/static/images/pause-icon.svg" alt="Pause" width="16" height="16">'; }
 
 function toggleSound(s) {
     const node = soundNodes[s.id];
@@ -621,13 +621,18 @@ async function loadCustomUploads() {
 }
 
 // ── AMBIENCE PREF PERSISTENCE ─────────────────────────────────────
+function getAmbiencePrefKey() {
+    const userId = document.querySelector('meta[name="dusty-uid"]')?.content || '0';
+    return `${PREF_KEY}.${userId}`;
+}
+
 function loadAmbiencePrefs() {
-    try { return JSON.parse(localStorage.getItem(PREF_KEY) || '{}'); } catch { return {}; }
+    try { return JSON.parse(localStorage.getItem(getAmbiencePrefKey()) || '{}'); } catch { return {}; }
 }
 function saveAmbiencePref(key, value) {
     const prefs = loadAmbiencePrefs();
     prefs[key]  = value;
-    try { localStorage.setItem(PREF_KEY, JSON.stringify(prefs)); } catch {}
+    try { localStorage.setItem(getAmbiencePrefKey(), JSON.stringify(prefs)); } catch {}
     // Fire-and-forget server sync
     fetch('/api/timer/ambience/prefs', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -639,18 +644,13 @@ function restoreAmbienceFromPrefs() {
     const prefs = loadAmbiencePrefs();
     if (prefs.bgId && prefs.bgType && prefs.bgValue) {
         applyBackground({ id: prefs.bgId, type: prefs.bgType, value: prefs.bgValue, label: '' });
+    } else {
+        applyBackground(BG_PRESETS[0]);
     }
 }
 
-// Called once uploads are loaded so we can restore custom backgrounds too
-function loadAmbiencePrefs() {
-    try { return JSON.parse(localStorage.getItem(PREF_KEY) || '{}'); } catch { return {}; }
-}
-
-// Override to also restore
+// Restore the user-specific ambience after uploads are loaded and DOM is ready.
 (function() {
-    const _orig = loadCustomUploads;
-    // Restore background after a tick so DOM is ready
     setTimeout(restoreAmbienceFromPrefs, 300);
 })();
 

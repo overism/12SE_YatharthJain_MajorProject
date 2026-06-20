@@ -276,6 +276,11 @@
 }
 .timer-ctrl.play { background: linear-gradient(135deg,#f5761c,#ee4319); color:#fff; box-shadow:0 4px 12px rgba(245,89,28,.35); }
 .timer-ctrl:hover { transform: scale(1.08); }
+.timer-ctrl .control-icon {
+    width: 24px;
+    height: 24px;
+    display: block;
+}
 .timer-subject-pill {
     font-size: 12px; font-weight: 600; padding: 5px 14px; border-radius: 20px;
     background: rgba(245,118,28,.1); color: #c85010;

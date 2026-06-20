@@ -383,8 +383,24 @@
     width: 34px; height: 34px; border-radius: 50%;
     background: linear-gradient(135deg,#f5761c,#ee4319);
     display: flex; align-items: center; justify-content: center;
-    color: white; font-size: 13px;
+    color: white; font-size: 13px; line-height: 1;
     box-shadow: 0 4px 12px rgba(245,89,28,0.35);
+}
+
+.trash-grey-icon {
+    filter: grayscale(100%);
+    opacity: 0.6;
+    transition: all 0.2s ease;
+}
+
+.deck-card-delete-btn {
+    background: none; border: none; cursor: pointer; padding: 0;
+    line-height: 1; display: flex; align-items: center; justify-content: center;
+}
+
+.deck-card-delete-btn:hover .trash-grey-icon {
+    filter: hue-rotate(-8deg) saturate(1.2) brightness(1.1);
+    opacity: 1;
 }
 
 .empty-state {

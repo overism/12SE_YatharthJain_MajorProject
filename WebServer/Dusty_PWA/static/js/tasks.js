@@ -250,6 +250,42 @@
         },
         columnDefs: [
           {
+            headerName: "",
+            field: "completed",
+            width: 45,
+            minWidth: 45,
+            maxWidth: 45,
+            editable: false,
+            cellRenderer: params => {
+              const checkbox = document.createElement('input');
+              checkbox.type = 'checkbox';
+              checkbox.checked = params.value === true;
+              checkbox.style.margin = '0';
+              checkbox.style.cursor = 'pointer';
+              checkbox.style.width = '18px';
+              checkbox.style.height = '18px';
+              checkbox.style.accentColor = '#f5761c';
+
+              checkbox.addEventListener('change', async () => {
+                if (checkbox.checked) {
+                  // Mark as complete and delete from database
+                  const taskID = params.data.taskID;
+                  const success = await deleteTask(taskID);
+                  if (success) {
+                    showTaskStatus('Task completed and removed!', 'success');
+                    // Refresh the grid
+                    await populateGrids();
+                  } else {
+                    checkbox.checked = false;
+                  }
+                }
+              });
+
+              return checkbox;
+            },
+            cellClass: 'checkbox-cell'
+          },
+          {
             headerName: "Task",
             field: "task",
             cellClass: ["editable-cell", "editable-text-cell"],
@@ -357,16 +393,37 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ taskID, field, value })
         });
-        
+
         if (!response.ok) {
           const error = await response.json().catch(() => ({}));
           throw new Error(error.error || 'Failed to update task');
         }
-        
+
         return true;
       } catch (error) {
         console.error('Error updating task:', error);
         showTaskStatus(`Failed to update task: ${error.message}`, 'error');
+        return false;
+      }
+    }
+
+    async function deleteTask(taskID) {
+      try {
+        const response = await fetch('/delete_task', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ taskID })
+        });
+
+        if (!response.ok) {
+          const error = await response.json().catch(() => ({}));
+          throw new Error(error.error || 'Failed to delete task');
+        }
+
+        return true;
+      } catch (error) {
+        console.error('Error deleting task:', error);
+        showTaskStatus(`Failed to delete task: ${error.message}`, 'error');
         return false;
       }
     }

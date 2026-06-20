@@ -4,7 +4,7 @@
   --text: #ffffff;
 }
 
-html,body{height:100%;margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;background:#0f0f11;}
+html,body{height:100%;margin:0;font-family:'DM Sans',system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;background:#0f0f11;}
 body{
   background:
     linear-gradient(rgba(196, 49, 4, 0.45), rgba(0,0,0,0.45)),
@@ -110,6 +110,7 @@ body{
 
 .form-group{display:flex;flex-direction:column;margin-bottom:12px;}
 label{font-size:13px;margin-bottom:8px;color:rgba(255,255,255,0.85);}
+.field-hint{font-size:11px;color:rgba(255,255,255,0.5);margin-top:4px;}
 
 input[type="text"],
 input[type="email"],

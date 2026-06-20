@@ -811,6 +811,24 @@
 
 .hidden { display: none !important; }
 
+/* Icon image styles */
+.btn-icon-img { width: 18px; height: 18px; flex-shrink: 0; }
+.btn-icon-sm { width: 16px; height: 16px; }
+.btn-icon-xs { width: 14px; height: 14px; }
+
+/* Updated icon selectors */
+.btn svg,
+.btn-icon-img { width: 18px; height: 18px; flex-shrink: 0; }
+.btn-icon:hover { background: rgba(255,255,255,.12); color: rgba(255,255,255,.9); }
+.btn-icon svg,
+.btn-icon .btn-icon-sm { width: 18px; height: 18px; }
+.file-preview-icon { width: 18px; height: 18px; flex-shrink: 0; }
+.file-preview-remove .btn-icon-sm { width: 14px; height: 14px; }
+.composer-attach-btn .btn-icon-img { width: 18px; height: 18px; }
+.composer-send-btn .btn-icon-img { width: 14px; height: 14px; }
+.composer-mode-btn .btn-icon-img { width: 18px; height: 18px; flex-shrink: 0; }
+.chat-item-action .btn-icon-xs { width: 14px; height: 14px; }
+
 /* ── RESPONSIVE ── */
 @media (max-width: 1100px) {
     .chat-workspace { grid-template-columns: 210px minmax(0,1fr); }

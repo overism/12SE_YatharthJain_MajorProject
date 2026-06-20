@@ -7,6 +7,8 @@
     <title>Profile - Dusty</title>
     <link rel="icon" href="{{ url_for('static', filename='images/mainicon.png') }}">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}">
     <script defer src="{{ url_for('static', filename='js/dusty.js') }}"></script>
@@ -259,6 +261,22 @@
     function previewAvatar(e) {
         const file = e.target.files[0];
         if (!file) return;
+
+        // Validate file type
+        const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif'];
+        if (!allowedTypes.includes(file.type)) {
+            toast('Please select a PNG, JPG, or GIF image.', 'error');
+            e.target.value = '';
+            return;
+        }
+
+        // Validate file size (5MB max)
+        if (file.size > 5 * 1024 * 1024) {
+            toast('File size must be less than 5MB.', 'error');
+            e.target.value = '';
+            return;
+        }
+
         const reader = new FileReader();
         reader.onload = ev => {
             document.getElementById('avatarPreview').src = ev.target.result;
@@ -268,7 +286,89 @@
         reader.readAsDataURL(file);
     }
 
-    /* Avatar form submits normally (multipart POST to /upload-avatar) — no JS needed */
+    /* Drag and drop handling for avatar upload */
+    const avatarDropZone = document.querySelector('.file-drop');
+    if (avatarDropZone) {
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            avatarDropZone.addEventListener(eventName, e => {
+                e.preventDefault();
+                e.stopPropagation();
+            });
+        });
+
+        ['dragenter', 'dragover'].forEach(eventName => {
+            avatarDropZone.addEventListener(eventName, e => {
+                avatarDropZone.classList.add('drag-over');
+            });
+        });
+
+        ['dragleave', 'drop'].forEach(eventName => {
+            avatarDropZone.addEventListener(eventName, e => {
+                avatarDropZone.classList.remove('drag-over');
+            });
+        });
+
+        avatarDropZone.addEventListener('drop', e => {
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                document.getElementById('avatarFileInput').files = files;
+                // Trigger change event manually
+                const event = new Event('change', { bubbles: true });
+                document.getElementById('avatarFileInput').dispatchEvent(event);
+            }
+        });
+    }
+
+    /* Avatar form handles via AJAX to properly close modal on success */
+    document.getElementById('avatarForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+        const form = e.target;
+        const fileInput = document.getElementById('avatarFileInput');
+        const btn = document.getElementById('avatarUploadBtn');
+
+        if (!fileInput.files[0]) {
+            toast('Please select a file first.', 'error');
+            return;
+        }
+
+        btn.disabled = true;
+        btn.textContent = 'Uploading...';
+
+        try {
+            const formData = new FormData(form);
+            const res = await fetch('/upload-avatar', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await res.json();
+
+            if (res.ok && data.success) {
+                toast('Avatar updated!', 'success');
+                // Update the displayed avatar
+                const avatarImgEl = document.getElementById('avatarImgEl');
+                const avatarDisplay = document.getElementById('avatarDisplay');
+                const avatarInitial = document.getElementById('avatarInitial');
+
+                if (avatarImgEl) {
+                    avatarImgEl.src = data.avatar_url;
+                } else if (avatarDisplay) {
+                    avatarDisplay.innerHTML = `<img src="${data.avatar_url}" alt="Avatar" id="avatarImgEl">`;
+                }
+
+                // Reset and close modal
+                form.reset();
+                document.getElementById('avatarPreviewWrap').style.display = 'none';
+                closeAvatarModal();
+            } else {
+                toast(data.error || 'Upload failed.', 'error');
+            }
+        } catch (err) {
+            toast('Network error during upload.', 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Upload';
+        }
+    });
 
     /* ── DELETE MODAL ── */
     function openDeleteModal()  { document.getElementById('deleteModal').classList.remove('hidden'); }

@@ -7,6 +7,10 @@
     <link rel="icon" href="{{ url_for('static', filename='images/mainicon.png') }}">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/login.css') }}">
+    <script src="{{ url_for('static', filename='js/dusty.js') }}"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   </head>
   <script>
     if ('serviceWorker' in navigator) {
@@ -81,6 +85,37 @@
         window.addEventListener('blur', reset);
       })();
 
+      // Client-side validation for login
+      function validateLogin(e) {
+          const email = document.getElementById('email').value.trim();
+          const password = document.getElementById('password').value;
+          const errorEl = document.getElementById('loginError');
+
+          // Validate email format
+          const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+          if (!email || !emailRegex.test(email)) {
+              e.preventDefault();
+              errorEl.textContent = 'Please enter a valid email address.';
+              return false;
+          }
+
+          // Validate password not empty
+          if (!password || password.length < 1) {
+              e.preventDefault();
+              errorEl.textContent = 'Please enter your password.';
+              return false;
+          }
+
+          errorEl.textContent = '';
+          return true;
+      }
+
+      // Attach validation to form
+      const loginForm = document.getElementById('loginForm');
+      if (loginForm) {
+          loginForm.addEventListener('submit', validateLogin);
+      }
+
       // Show server-side errors
       const loginParams = new URLSearchParams(window.location.search);
       const loginErrEl  = document.getElementById('loginError');
@@ -95,6 +130,5 @@
         navigator.serviceWorker.register('/sw.js').catch(()=>{});
       }
     </script>
-    <script src="{{ url_for('static', filename='js/dusty.js') }}"></script>
   </body>
 </html>

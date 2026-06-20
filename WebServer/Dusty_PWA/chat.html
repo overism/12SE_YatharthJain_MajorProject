@@ -7,8 +7,14 @@
     <title>AI Assistant - Dusty</title>
     <link rel="icon" href="{{ url_for('static', filename='images/mainicon.png') }}">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/chat.css') }}">
+    <!-- KaTeX for mathematical notation rendering -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.css" crossorigin="anonymous">
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/katex.min.js" crossorigin="anonymous"></script>
+    <script defer src="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.9/contrib/auto-render.min.js" crossorigin="anonymous"></script>
     <script defer src="{{ url_for('static', filename='js/subject-colours.js') }}"></script>
     <script defer src="{{ url_for('static', filename='js/dusty.js') }}"></script>
     <script defer src="{{ url_for('static', filename='js/chat.js') }}"></script>
@@ -47,14 +53,6 @@
             <h1 class="chat-title">AI Assistant</h1>
         </div>
         <div class="chat-header-actions">
-            <div class="kb-status" id="kbStatus">
-                <span class="kb-dot"></span>
-                <span id="kbStatusText">Checking…</span>
-            </div>
-            <button class="btn btn-secondary" id="ingestBtn" type="button">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><polyline points="23 20 23 14 17 14"/><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/></svg>
-                Rebuild KB
-            </button>
             <button class="btn btn-secondary" id="newChatBtn" type="button">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                 New Chat
@@ -68,10 +66,7 @@
         <!-- CHAT HISTORY SIDEBAR -->
         <aside class="chat-history-panel" aria-label="Chat history">
             <div class="chat-history-header">
-                <h3>History</h3>
-                <button class="btn-icon" id="toggleHistoryBtn" type="button" title="Collapse history" aria-label="Toggle chat history">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="14" height="14"><polyline points="15 18 9 12 15 6"/></svg>
-                </button>
+                <h3 style="padding: 5px 10px;">History</h3>
             </div>
             <div class="chat-history-list" id="chatHistoryList">
                 <p class="chat-history-empty">No chats yet. Start a new conversation!</p>
@@ -82,15 +77,7 @@
         <section class="chat-main" aria-label="Conversation">
 
             <div class="messages" id="messages" aria-live="polite" aria-label="Chat messages">
-                <article class="message assistant">
-                    <div class="msg-av">
-                        <img src="/static/images/icon-192.png" width="22" height="22" alt="Dusty assistant">
-                    </div>
-                    <div class="msg-bubble">
-                        <strong>Ready when you are.</strong>
-                        <p>Ask any HSC question, paste a response for band feedback, generate an exam question, or switch to Quiz mode.</p>
-                    </div>
-                </article>
+                <!-- Populated by JS on load -->
             </div>
 
             <!-- Composer -->
@@ -100,23 +87,23 @@
 
                 <div class="composer-body">
                     <button class="composer-attach-btn" type="button" id="attachBtn" title="Attach a file" aria-label="Attach file">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+                        <img src="{{ url_for('static', filename='images/file-icon.svg') }}" alt="Attach" class="btn-icon-img">
                     </button>
                     <input type="file" id="fileInput" accept=".pdf,.docx,.doc,.pptx,.ppt,.txt,.md,.png,.jpg,.jpeg" style="display:none" aria-label="Attach file for context">
 
                     <div class="composer-mode-wrap">
                         <button class="composer-mode-btn" type="button" id="modeBtn" aria-haspopup="true" aria-expanded="false">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                            <span id="modeBtnLabel">General</span>
+                            <img src="{{ url_for('static', filename='images/settings-brown-icon.svg') }}" alt="Mode" class="btn-icon-img" style="pointer-events: none;">
+                            <span id="modeBtnLabel" style="pointer-events: none;">General</span>
                         </button>
                         <div class="composer-mode-popover hidden" id="modePopover" role="menu">
-                            <button type="button" class="mode-popover-item active" data-mode="tutor" data-subject="General">
+                            <button type="button" class="mode-popover-item active" data-mode="tutor">
                                 <strong>General</strong><small>Ask anything — Dusty figures out the subject</small>
                             </button>
-                            <button type="button" class="mode-popover-item" data-mode="feedback" data-subject="General">
+                            <button type="button" class="mode-popover-item" data-mode="feedback">
                                 <strong>Feedback</strong><small>Get a band estimate on a response you paste in</small>
                             </button>
-                            <button type="button" class="mode-popover-item" data-mode="generate" data-subject="General">
+                            <button type="button" class="mode-popover-item" data-mode="generate">
                                 <strong>Practice Question</strong><small>Generate one exam-style question</small>
                             </button>
                             <button type="button" class="mode-popover-item" data-action="quiz">
@@ -137,7 +124,7 @@
                     </button>
                 </div>
                 <div class="composer-footer">
-                    <span class="composer-hint" id="composerHint">Tutor mode — scaffolded HSC guidance</span>
+                    <span class="composer-hint" id="composerHint">General mode — scaffolded HSC guidance</span>
                 </div>
             </form>
 

@@ -201,6 +201,18 @@
     cursor: cell;
 }
 
+.checkbox-cell {
+    text-align: center !important;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.checkbox-cell input[type="checkbox"] {
+    margin: 0;
+    display: block;
+}
+
 .editable-cell:hover {
     outline: 2px solid rgba(245, 118, 28, 0.25);
     outline-offset: -2px;

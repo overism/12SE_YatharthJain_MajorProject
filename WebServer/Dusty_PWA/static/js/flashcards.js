@@ -233,8 +233,8 @@ function renderDeckGrid() {
                     <span class="deck-card-play">▶</span>
                     <button
                         onclick="deleteDeckFromDB(${deck.id}, event)"
-                        style="background:none;border:none;cursor:pointer;font-size:14px;color:#ccc;padding:0;line-height:1"
-                        title="Delete deck">🗑</button>
+                        class="deck-card-delete-btn"
+                        title="Delete deck"><img src="/static/images/trash-grey-icon.svg" alt="Delete" width="16" height="16" class="trash-grey-icon"></button>
                 </div>
             </div>
         </div>

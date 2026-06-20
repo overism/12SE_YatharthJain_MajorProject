@@ -7,6 +7,8 @@
     <title>Smart Calendar - Dusty</title>
     <link rel="icon" href="{{ url_for('static', filename='images/mainicon.png') }}">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,300;9..40,400;9..40,500;9..40,600;9..40,700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/main.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/calendar.css') }}">
     <link href='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.css' rel='stylesheet' />
@@ -48,7 +50,7 @@
         <div class="calendar-header">
             <h1 class="calendar-title">Smart Calendar</h1>
             <div class="calendar-controls">
-                <button class="btn btn-secondary" id="newEventBtn">+ New Event</button>
+                <button class="btn btn-secondary" id="newEventBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg> New Event</button>
                 <button class="btn btn-primary" id="generateBtn">Generate Schedule</button>
                 <button class="btn btn-ghost" id="syncBtn" style="display:none;">Sync Google Calendar</button>
                 <button class="btn btn-ghost" id="connectGoogleBtn" style="display:none;">🔗 Connect Google Calendar</button>
@@ -140,74 +142,6 @@
                     </div>
                 </div>
 
-                <!-- Structured Input Section -->
-                <div class="form-section collapsible">
-                    <div class="form-section-header">
-                        <svg class="form-section-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M9 5H7a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-2"/>
-                            <rect x="9" y="3" width="6" height="4" rx="1"/>
-                            <line x1="9" y1="12" x2="15" y2="12"/>
-                            <line x1="9" y1="16" x2="13" y2="16"/>
-                        </svg>
-                        <span>Structured Details</span>
-                        <button class="collapse-toggle" type="button" onclick="toggleScheduleSection(this.closest('.form-section'))" aria-label="Toggle structured details">▼</button>
-                    </div>
-                    <div class="form-section-content">
-                        <!-- Exams/Tests -->
-                        <div class="input-group">
-                            <h4>Exams & Tests <span class="optional-mark">(optional)</span></h4>
-                            <p class="form-hint">If you add an exam, both subject and date are required.</p>
-                            <div id="examsContainer">
-                                <div class="schedule-item-row">
-                                    <input type="text" class="schedule-input-subject" placeholder="Subject * (e.g. Maths)" data-type="exam" aria-label="Exam subject required when adding an exam">
-                                    <input type="date" class="schedule-input-date" placeholder="Date *" aria-label="Exam date required when adding an exam">
-                                    <button type="button" class="btn-remove-item" onclick="removeScheduleRow(this)">&times;</button>
-                                </div>
-                            </div>
-                            <button type="button" class="btn btn-primary" onclick="addScheduleRow('exams')">+ Add Exam</button>
-                        </div>
-
-                        <!-- Assignments -->
-                        <div class="input-group">
-                            <h4>Assignments <span class="optional-mark">(optional)</span></h4>
-                            <p class="form-hint">If you add an assignment, both title and due date are required.</p>
-                            <div id="assignmentsContainer">
-                                <div class="schedule-item-row">
-                                    <input type="text" class="schedule-input-subject" placeholder="Assignment title *" data-type="assignment" aria-label="Assignment title required when adding an assignment">
-                                    <input type="date" class="schedule-input-date" placeholder="Due date *" aria-label="Assignment due date required when adding an assignment">
-                                    <button type="button" class="btn-remove-item" onclick="removeScheduleRow(this)">&times;</button>
-                                </div>
-                            </div>
-                            <button type="button" class="btn btn-primary" onclick="addScheduleRow('assignments')">+ Add Assignment</button>
-                        </div>
-
-                        <!-- Priority Subjects -->
-                        <div class="input-group">
-                            <h4>Subjects Needing More Focus <span class="optional-mark">(optional)</span></h4>
-                            <div class="priority-subjects-grid">
-                                <label class="checkbox-label">
-                                    <input type="checkbox" name="priority_subject" value="maths"> Maths
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" name="priority_subject" value="english"> English
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" name="priority_subject" value="physics"> Physics
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" name="priority_subject" value="chemistry"> Chemistry
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" name="priority_subject" value="biology"> Biology
-                                </label>
-                                <label class="checkbox-label">
-                                    <input type="checkbox" name="priority_subject" value="economics"> Economics
-                                </label>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
                 <!-- Preferences Section -->
                 <div class="form-section collapsible">
                     <div class="form-section-header">
@@ -259,11 +193,6 @@
                                     <option value="6">6 hours</option>
                                 </select>
                             </div>
-                        </div>
-                        <div class="form-group">
-                            <label class="checkbox-label">
-                                <input type="checkbox" id="includeBreaks" checked> Include breaks between sessions
-                            </label>
                         </div>
                         <div class="form-group">
                             <label>Preferred Study Techniques <span class="optional-mark">(optional)</span></label>
@@ -931,9 +860,7 @@
             // Preferences
             const options = {
                 session_duration: parseInt(document.getElementById('sessionDuration').value),
-                max_daily_hours: parseInt(document.getElementById('maxDaily').value),
-                include_breaks: document.getElementById('includeBreaks').checked,
-                break_duration: 10
+                max_daily_hours: parseInt(document.getElementById('maxDaily').value)
             };
 
             return {

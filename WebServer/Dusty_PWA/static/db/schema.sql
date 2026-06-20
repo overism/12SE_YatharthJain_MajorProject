@@ -16,9 +16,7 @@ CREATE TABLE IF NOT EXISTS "google_creds" (
 	"accessToken" TEXT,
 	"refreshToken" TEXT,
 	"expiry" TEXT,
-	"expiresAt" INTEGER,
 	"calendarID" TEXT DEFAULT 'primary',
-	"syncToken" TEXT,
 	FOREIGN KEY("userID") REFERENCES "users"("userID") ON DELETE CASCADE
 );
 
@@ -63,15 +61,6 @@ CREATE TABLE IF NOT EXISTS "events" (
 	"lastSynced" DATETIME,
 	"createdAt" DATETIME DEFAULT CURRENT_TIMESTAMP,
 	"updatedAt" DATETIME DEFAULT CURRENT_TIMESTAMP,
-	FOREIGN KEY("userID") REFERENCES "users"("userID") ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS "schedules" (
-	"scheduleID" INTEGER PRIMARY KEY AUTOINCREMENT,
-	"userID" INTEGER NOT NULL,
-	"title" TEXT,
-	"isActive" BOOLEAN DEFAULT 1,
-	"createdAt" DATETIME DEFAULT CURRENT_TIMESTAMP,
 	FOREIGN KEY("userID") REFERENCES "users"("userID") ON DELETE CASCADE
 );
 
@@ -169,10 +158,3 @@ CREATE TABLE IF NOT EXISTS "chat_messages" (
 );
 
 INSERT INTO "users" VALUES (1,'admin','admin@DustyAI.com', 'DustyAdminPass123!', NULL, 'Administrator account', NULL);
-INSERT INTO "subjects" ("userID", "subjectName", "colourScheme", "sortOrder") VALUES
-	(1, 'Software Engineering', 'orange', 1),
-	(1, 'Mathematics', 'blue', 2),
-	(1, 'English', 'green', 3),
-	(1, 'Science', 'red', 4),
-	(1, 'Humanities', 'purple', 5);
-COMMIT;

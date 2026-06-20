@@ -52,8 +52,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     EL.sendBtn     = document.getElementById('sendBtn');
     EL.sendLabel   = document.getElementById('sendLabel');
     EL.hint        = document.getElementById('composerHint');
-    EL.kbStatus    = document.getElementById('kbStatus');
-    EL.kbText      = document.getElementById('kbStatusText');
     EL.chatHistory = document.getElementById('chatHistoryList');
     EL.newChatBtn  = document.getElementById('newChatBtn');
     EL.attachBtn   = document.getElementById('attachBtn');
@@ -154,14 +152,11 @@ function handleFileAttach(input) {
     if (!EL.filePreview) return;
     EL.filePreview.innerHTML = `
         <div class="file-preview-item">
-            <svg class="file-preview-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-                <polyline points="14 2 14 8 20 8"/>
-            </svg>
+            <img src="/static/images/file-icon.svg" class="file-preview-icon" alt="File">
             <span class="file-preview-name">${escH(file.name)}</span>
             <span class="file-preview-size">${fmtBytes(file.size)}</span>
             <button class="file-preview-remove" onclick="removeAttachedFile()" type="button" aria-label="Remove attached file">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                <img src="/static/images/cross-brown-icon.svg" alt="Remove" class="btn-icon-sm">
             </button>
         </div>`;
     EL.filePreview.classList.remove('hidden');
@@ -474,6 +469,7 @@ function addMsg(role, text) {
     const bub = document.createElement('div');
     bub.className = 'msg-bubble';
     bub.innerHTML = renderMD(text);
+    renderMath(bub);
     art.appendChild(av); art.appendChild(bub);
     EL.messages.appendChild(art);
     EL.messages.scrollTop = EL.messages.scrollHeight;
@@ -488,9 +484,27 @@ function addRawMsg(role, html) {
     const bub = document.createElement('div');
     bub.className = 'msg-bubble';
     bub.innerHTML = html;
+    renderMath(bub);
     art.appendChild(av); art.appendChild(bub);
     EL.messages.appendChild(art);
     EL.messages.scrollTop = EL.messages.scrollHeight;
+}
+
+// ── MATH RENDERER (KaTeX) ─────────────────────────────────────────
+function renderMath(el) {
+    if (!window.renderMathInElement) return;
+    try {
+        renderMathInElement(el, {
+            delimiters: [
+                { left: '$$',   right: '$$',   display: true  },
+                { left: '$',    right: '$',    display: false },
+                { left: '\\[', right: '\\]', display: true  },
+                { left: '\\(', right: '\\)', display: false },
+            ],
+            throwOnError: false,
+            output: 'html',
+        });
+    } catch (e) { /* KaTeX not yet loaded — silently skip */ }
 }
 
 function userAvatarHTML() {
@@ -521,6 +535,15 @@ function removeThinking() {
 function renderMD(raw) {
     if (!raw) return '<p>No response.</p>';
     let s = escH(raw);
+
+    // Pre-process: convert inline bullet separators produced by Gemini
+    // e.g. "outcomes are:* PH11-5: text* PH11-6: text"
+    // → split into proper newline-separated bullet lines BEFORE italic processing
+    // consumes the asterisks.
+    // Match a * that is (a) preceded by a non-whitespace char and
+    // (b) followed by a word char or digit — but not ** (bold).
+    s = s.replace(/([^\s\*])\* ([A-Za-z0-9])/g, '$1$2');
+
     s = s.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>');
     s = s.replace(/^##\s+(.+)$/gm,  '<h2>$1</h2>');
     s = s.replace(/^#\s+(.+)$/gm,   '<h1>$1</h1>');
@@ -566,12 +589,8 @@ async function checkKB() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Status check failed');
         const n = data.chunks_in_database || 0;
-        EL.kbStatus?.classList.toggle('ready', n > 0);
-        EL.kbStatus?.classList.remove('error');
         if (EL.kbText) EL.kbText.textContent = n > 0 ? `${n.toLocaleString()} chunks` : 'No chunks — Rebuild KB';
     } catch {
-        EL.kbStatus?.classList.add('error');
-        EL.kbStatus?.classList.remove('ready');
         if (EL.kbText) EL.kbText.textContent = 'KB unavailable';
     }
 }
@@ -597,8 +616,8 @@ function renderChatHistory() {
         <div class="chat-history-item ${sess.sessionID === Chat.sessionID ? 'active' : ''}" data-session-id="${sess.sessionID}">
             <span class="chat-item-title">${escH(sess.title || 'Untitled Chat')}</span>
             <span class="chat-item-actions">
-                <button class="chat-item-action" title="Rename" onclick="renameChatSession(${sess.sessionID}); event.stopPropagation();" aria-label="Rename chat">✎</button>
-                <button class="chat-item-action" title="Delete" onclick="deleteChatSession(${sess.sessionID}); event.stopPropagation();" aria-label="Delete chat">×</button>
+                <button class="chat-item-action" title="Rename" onclick="renameChatSession(${sess.sessionID}); event.stopPropagation();" aria-label="Rename chat"><img src="/static/images/rename-icon.svg" alt="Rename" class="btn-icon-xs"></button>
+                <button class="chat-item-action" title="Delete" onclick="deleteChatSession(${sess.sessionID}); event.stopPropagation();" aria-label="Delete chat"><img src="/static/images/trash-grey-icon.svg" alt="Delete" class="btn-icon-xs"></button>
             </span>
         </div>`).join('');
 
@@ -614,7 +633,7 @@ async function createNewChat() {
         Chat.quiz         = null;
         Chat.activeQuizId = null;
         EL.messages.innerHTML = '';
-        addMsg('assistant', 'New chat started. What would you like to study?');
+        addMsg('assistant', '**Ready when you are.**\nAsk any HSC question, paste a response for band feedback, generate an exam question, or switch to Quiz mode.');
         await loadChatSessions();
         showToast('New chat created', 'info');
     } catch (err) { showToast(err.message, 'error'); }
@@ -631,7 +650,8 @@ async function loadChat(sessionID) {
         Chat.activeQuizMessageID   = null;
         EL.messages.innerHTML      = '';
 
-        (data.messages || []).forEach(msg => {
+        const messages = data.messages || [];
+        messages.forEach(msg => {
             if (msg.mode === 'quiz') {
                 try { addQuizBubble(JSON.parse(msg.content), { messageID: msg.messageID }); }
                 catch { addMsg(msg.role, msg.content); }
@@ -647,6 +667,11 @@ async function loadChat(sessionID) {
             }
             addMsg(msg.role, msg.content);
         });
+
+        // Show greeting for empty sessions (new chat with no saved messages yet)
+        if (messages.length === 0) {
+            addMsg('assistant', '**Ready when you are.**\nAsk any HSC question, paste a response for band feedback, generate an exam question, or switch to Quiz mode.');
+        }
 
         renderChatHistory();
     } catch (err) { showToast(err.message, 'error'); }
