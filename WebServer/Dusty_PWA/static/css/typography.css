@@ -1,0 +1,180 @@
+/*
+ * typography.css  –  Dusty Global App Typography
+ * ================================================
+ * INSTRUCTION: Add this <link> tag in ALL app page HTML templates
+ * (home.html, tasks.html, calendar.html, timer.html, chat.html,
+ *  flashcards.html, progress.html, resources.html, profile.html)
+ * BEFORE the page-specific CSS link:
+ *
+ *   <link rel="preconnect" href="https://fonts.googleapis.com">
+ *   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+ *   <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&display=swap" rel="stylesheet">
+ *   <link rel="stylesheet" href="{{ url_for('static', filename='css/typography.css') }}">
+ *
+ * Cooper BT is served from the local fonts already included in main.css.
+ * Roboto replaces the current Arial fallback everywhere.
+ *
+ * Save this file as:  WebServer/Dusty_PWA/static/css/typography.css
+ */
+
+/* ── Base body typography (matches landing page feel) ── */
+html, body {
+    font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-size: 15px;
+    line-height: 1.6;
+    color: #22140b;
+}
+
+/* ── Cooper BT for all display headings ── */
+h1, h2, h3,
+.tasks-title,
+.calendar-title,
+.timer-title,
+.chat-title,
+.flashcards-title,
+.progress-title,
+.resources-title,
+.profile-title,
+.dash-title,
+.widget-title,
+.panel-title,
+.presets-title,
+.deck-area h2,
+.library-section h2,
+.subject-title,
+.modal-title,
+.task-form-title,
+.quiz-gen-title,
+.event-title,
+.schedule-modal-title,
+.session-complete h3 {
+    font-family: 'Cooper BT', Roboto, Arial, 'Times New Roman', serif;
+    letter-spacing: -0.01em;
+}
+
+/* ── Larger, friendlier body text in panels ── */
+.msg-bubble,
+.form-group label,
+.form-group input,
+.form-group select,
+.form-group textarea,
+.ctrl-select,
+.ctrl-input,
+.subject-card,
+.task-row,
+.upcoming-task,
+.preset-btn,
+.mode-btn,
+.deck-card-title,
+.deck-card-module,
+.quiz-question-text,
+.quiz-options label,
+.quiz-answer,
+.result-row-info {
+    font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+}
+
+/* ── Sidebar nav buttons — match landing page nav feel ── */
+.sidebar .btn {
+    font-family: 'Cooper BT', 'Roboto', 'Segoe UI', Arial, sans-serif;
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: 0.04em;
+}
+
+/* ── Metric / stat values use Cooper BT (like landing page) ── */
+.metric-value,
+.stat-card-val,
+.timer-display,
+.quiz-score-big,
+.pile-count,
+.result-tile strong {
+    font-family: 'Cooper BT', Roboto, Arial, 'Times New Roman', serif;
+}
+
+/* ── Input fields — Roboto, slightly larger for readability ── */
+input, select, textarea, button {
+    font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+}
+
+/* ── Code / monospace (timer display already handled above) ── */
+code, pre, .timer-display {
+    font-family: 'Roboto Mono', 'Courier New', monospace;
+}
+
+/* ── Table text ── */
+.sessions-table th,
+.sessions-table td,
+.ag-cell,
+.ag-header-cell-label {
+    font-family: 'Roboto', 'Segoe UI', Arial, sans-serif !important;
+}
+
+/* ── Pill / badge text ── */
+.status-badge,
+.progress-badge,
+.deck-card-count,
+.deck-card-subject,
+.kb-status,
+.meta-badge,
+.section-badge,
+.lib-badge,
+.tree-file-ext,
+.ext-pdf, .ext-docx, .ext-pptx, .ext-xlsx, .ext-txt {
+    font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+    font-weight: 700;
+}
+
+/* ── Eyebrow / overline labels ── */
+.ctrl-label,
+.form-label,
+.schedule-pref-label,
+.quick-label,
+.card-face-label,
+.tree-sidebar-header h3,
+.chat-history-header h3 {
+    font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-size: 10.5px;
+}
+
+/* ── Cooper BT gradient titles (consistent with landing page) ── */
+.tasks-title,
+.calendar-title,
+.timer-title,
+.chat-title,
+.flashcards-title,
+.progress-title,
+.resources-title,
+.profile-title,
+.dash-title {
+    font-size: clamp(1.75rem, 3.5vw, 2.25rem);
+    font-weight: 700;
+    background: linear-gradient(90deg, #f5761c, #ee4319);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1;
+}
+
+/* ── Link styling ── */
+a {
+    font-family: inherit;
+}
+
+/* ── Placeholder text ── */
+::placeholder {
+    font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+    font-weight: 400;
+    opacity: 0.55;
+}
+
+/* ── Smooth everything ── */
+* {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}

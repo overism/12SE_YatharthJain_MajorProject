@@ -65,7 +65,7 @@
 .search-icon-svg { width: 16px; height: 16px; flex-shrink: 0; }
 .btn-icon-sm { width: 16px; height: 16px; }
 .btn-icon-xs { width: 14px; height: 14px; }
-.upload-icon-img { width: 48px; height: 48px; }
+.upload-icon-img { width: 48px; height: 48px; background: transparent; }
 .btn::before { content:''; position:absolute; top:0; left:-100%; width:100%; height:100%; background:linear-gradient(90deg,transparent,rgba(255,255,255,.18),transparent); transition:left .45s; }
 .btn:hover::before { left:100%; }
 .btn-ghost { background:rgba(255,255,255,.08); color:rgba(255,255,255,.85); border:1px solid rgba(255,255,255,.14); }
@@ -150,8 +150,8 @@
     flex-shrink: 0;
 }
 .tree-sidebar-header h3 {
-    font-size: 10.5px; font-weight: 800; text-transform: uppercase;
-    letter-spacing: .9px; color: #b5ada5; margin: 0;
+    margin: 0; font-size: 15px; font-weight: 800;
+    color: #a36c47;
 }
 
 .library-tabs {
@@ -434,8 +434,7 @@
 .upload-dropzone:focus { outline: 2px solid #f5761c; outline-offset: 2px; }
 
 .upload-dropzone-icon {
-    width: 48px; height: 48px; margin: 0 auto 14px;
-    background: rgba(245,118,28,.1); border-radius: 12px;
+    width: 48px; height: 48px; margin: 0 auto 14px; border-radius: 12px;
     display: flex; align-items: center; justify-content: center;
 }
 .upload-dropzone-icon svg { width: 24px; height: 24px; color: #f5761c; }

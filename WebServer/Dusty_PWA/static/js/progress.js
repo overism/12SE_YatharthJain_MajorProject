@@ -40,6 +40,12 @@ let charts = {};
 
 document.addEventListener('DOMContentLoaded', loadProgress);
 
+const _progressChannel = typeof BroadcastChannel !== 'undefined'
+    ? new BroadcastChannel('dusty_tasks') : null;
+if (_progressChannel) {
+    _progressChannel.onmessage = () => loadProgress();
+}
+
 async function loadProgress() {
     try {
         const [progRes, sessRes, subjRes] = await Promise.all([
@@ -387,7 +393,7 @@ function renderSessionsTable(sessions) {
             <td><strong>${escHtml(s.subjectName || '—')}</strong>${s.presetName ? `<br><span style="font-size:11px;color:#bbb">${escHtml(s.presetName)}</span>` : ''}</td>
             <td>${fmtTime(s.durationSeconds || 0)}</td>
             <td>${fmtTime(s.timeSpentSeconds || 0)}</td>
-            <td><span class="status-badge badge-${s.status || 'in_progress'}">${capitalise(s.status || 'unknown')}</span></td>
+            <td><span class="status-badge badge-${s.status || 'In Progress'}">${capitalise(s.status || 'unknown')}</span></td>
         </tr>
     `).join('');
 }

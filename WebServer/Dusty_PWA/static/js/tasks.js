@@ -625,12 +625,27 @@
 
           // Reload all tasks to ensure grids are in sync
           await populateGrids();
+          if (_taskBroadcast) _taskBroadcast.postMessage({ type: 'task_updated' });
           closeTaskForm(section);
           showTaskStatus("Task saved successfully", "success");
         } catch (error) {
           showTaskStatus("Could not save task. Please try again.", "error");
         }
       });
+    
+    const _taskBroadcast = typeof BroadcastChannel !== 'undefined'
+      ? new BroadcastChannel('dusty_tasks')
+      : null;
+ 
+    if (_taskBroadcast) {
+        _taskBroadcast.onmessage = async (event) => {
+            // Any task change on another page → reload all grids
+            if (event.data?.type === 'task_updated') {
+                await populateGrids();
+            }
+        };
+    }
+
     });
   })
 })();

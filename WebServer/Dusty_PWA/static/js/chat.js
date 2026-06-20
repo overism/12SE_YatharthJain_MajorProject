@@ -23,8 +23,9 @@ let attachedFile = null;
 // ── CONSTANTS ────────────────────────────────────────────────────
 const PLACEHOLDERS = {
     tutor:    'Ask Dusty about any HSC topic…',
-    feedback: 'Paste your essay or response here for band-level feedback…',
-    generate: 'Describe the topic or module — Dusty will write a practice question…',
+    feedback: 'Paste your response here for band feedback…',
+    generate: 'Describe the type of question you want…',
+    quiz:     'Quiz mode — use the Generate button above',
 };
 
 const HINTS = {
@@ -178,20 +179,22 @@ function fmtBytes(b) {
 async function handleSubmit(e) {
     e.preventDefault();
     if (Chat.busy) return;
-
+ 
     const q = EL.input.value.trim();
     if (!q && !attachedFile) { showToast('Type a question or attach a file.', 'error'); return; }
-
+ 
     addMsg('user', q || `📎 ${attachedFile?.name}`);
     EL.input.value = ''; resizeTextarea();
     setBusy(true); showThinking();
-
+ 
     try {
         let data;
-        const subject    = Chat.subject || 'General';
-        const module     = Chat.module  || 'General';
+        const subject    = Chat.subject    || 'General';
+        const module     = Chat.module     || 'General';
         const difficulty = Chat.difficulty || 'medium';
-
+        // ── FIX: always include the current sessionID ──
+        const sessionID  = Chat.sessionID  || null;
+ 
         if (attachedFile) {
             const fd = new FormData();
             fd.append('question',   q);
@@ -200,16 +203,21 @@ async function handleSubmit(e) {
             fd.append('difficulty', difficulty);
             fd.append('mode',       Chat.mode);
             fd.append('file',       attachedFile);
-
+            if (sessionID) fd.append('sessionID', sessionID);
+ 
             const res  = await fetch('/api/chat', { method: 'POST', body: fd });
             const json = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(json.error || `Request failed (${res.status})`);
             data = json;
             removeAttachedFile();
         } else {
-            data = await postJSON('/api/chat', { question: q, subject, module, difficulty, mode: Chat.mode });
+            data = await postJSON('/api/chat', {
+                question: q, subject, module, difficulty,
+                mode: Chat.mode,
+                sessionID,   // ← new field — backend uses this, not the cookie
+            });
         }
-
+ 
         removeThinking();
         addMsg('assistant', data.response || 'No response returned.');
         if (data.sessionID) Chat.sessionID = data.sessionID;
@@ -534,40 +542,111 @@ function removeThinking() {
 // ── MARKDOWN RENDERER ────────────────────────────────────────────
 function renderMD(raw) {
     if (!raw) return '<p>No response.</p>';
-    let s = escH(raw);
-
-    // Pre-process: convert inline bullet separators produced by Gemini
-    // e.g. "outcomes are:* PH11-5: text* PH11-6: text"
-    // → split into proper newline-separated bullet lines BEFORE italic processing
-    // consumes the asterisks.
-    // Match a * that is (a) preceded by a non-whitespace char and
-    // (b) followed by a word char or digit — but not ** (bold).
-    s = s.replace(/([^\s\*])\* ([A-Za-z0-9])/g, '$1$2');
-
-    s = s.replace(/^###\s+(.+)$/gm, '<h3>$1</h3>');
-    s = s.replace(/^##\s+(.+)$/gm,  '<h2>$1</h2>');
-    s = s.replace(/^#\s+(.+)$/gm,   '<h1>$1</h1>');
-    s = s.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
-    s = s.replace(/\*\*(.+?)\*\*/g,     '<strong>$1</strong>');
-    s = s.replace(/\*(.+?)\*/g,         '<em>$1</em>');
-    s = s.replace(/`([^`]+)`/g,         '<code>$1</code>');
-    s = s.replace(/^---$/gm,            '<hr>');
-    s = s.replace(/\[(.+?)\]\{(red|green|blue|orange|purple|yellow|teal|pink)\}/g, '<span class="chat-colour-$2">$1</span>');
-
+ 
+    // ── Inline formatting applied to a single already-clean string ──
+    function fmt(s) {
+        s = s.replace(/\*\*\*(.+?)\*\*\*/gs, '<strong><em>$1</em></strong>');
+        s = s.replace(/\*\*(.+?)\*\*/gs,     '<strong>$1</strong>');
+        // Italic: only match when * is NOT preceded by a space or newline
+        // (avoids treating "* bullet" as italic opener)
+        s = s.replace(/(?<!\s)\*(?!\s)(.+?)(?<!\s)\*(?!\s)/g, '<em>$1</em>');
+        s = s.replace(/`([^`]+)`/g,           '<code>$1</code>');
+        s = s.replace(
+            /\[(.+?)\]\{(red|green|blue|orange|purple|yellow|teal|pink)\}/g,
+            '<span class="chat-colour-$2">$1</span>'
+        );
+        return s;
+    }
+ 
+    // ── Escape HTML entities ──
+    function esc(v) {
+        return String(v ?? '')
+            .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+            .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+    }
+ 
+    let s = esc(raw);
+ 
+    // ── Block-level elements that must be kept intact ──
+    s = s.replace(/^(#{1,3})\s+(.+)$/gm, (_, hashes, text) => {
+        const tag = `h${hashes.length}`;
+        return `<${tag}>${fmt(text)}</${tag}>`;
+    });
+    s = s.replace(/^---$/gm, '<hr>');
+ 
+    // ── Split on blank lines → blocks ──
     const blocks = s.split(/\n{2,}/);
-    return blocks.map(b => {
-        b = b.trim();
-        if (!b) return '';
-        if (b.startsWith('<h') || b.startsWith('<hr')) return b;
-        const lines = b.split('\n').map(l => l.trim()).filter(Boolean);
-        if (lines.every(l => /^[-*•]\s/.test(l)))
-            return `<ul>${lines.map(l => `<li>${l.replace(/^[-*•]\s/, '')}</li>`).join('')}</ul>`;
-        if (lines.every(l => /^\d+\.\s/.test(l)))
-            return `<ol>${lines.map(l => `<li>${l.replace(/^\d+\.\s/, '')}</li>`).join('')}</ol>`;
-        if (lines.every(l => /^>\s/.test(l)))
-            return `<blockquote>${lines.map(l => l.replace(/^>\s/, '')).join('<br>')}</blockquote>`;
-        return `<p>${lines.join('<br>')}</p>`;
-    }).join('') || '<p>No response.</p>';
+ 
+    const rendered = blocks.map(block => {
+        block = block.trim();
+        if (!block) return '';
+ 
+        // Already-converted heading / rule
+        if (/^<(h[123]|hr)/.test(block)) return block;
+ 
+        const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
+ 
+        // ── Detect list type at the RAW LINE level ────────────────
+        const isBullet  = l => /^[-*•]\s/.test(l);
+        const isOrdered = l => /^\d+\.\s/.test(l);
+        const isQuote   = l => /^>\s/.test(l);
+ 
+        const allBullet  = lines.every(isBullet);
+        const allOrdered = lines.every(isOrdered);
+        const allQuote   = lines.every(isQuote);
+ 
+        if (allBullet) {
+            return `<ul>${
+                lines.map(l => `<li>${fmt(l.replace(/^[-*•]\s/, ''))}</li>`).join('')
+            }</ul>`;
+        }
+ 
+        if (allOrdered) {
+            return `<ol>${
+                lines.map(l => `<li>${fmt(l.replace(/^\d+\.\s/, ''))}</li>`).join('')
+            }</ol>`;
+        }
+ 
+        if (allQuote) {
+            return `<blockquote>${
+                lines.map(l => fmt(l.replace(/^>\s/, ''))).join('<br>')
+            }</blockquote>`;
+        }
+ 
+        // ── Mixed block: may have bullet lines and plain lines ─────
+        const hasMixedList = lines.some(isBullet) || lines.some(isOrdered);
+ 
+        if (hasMixedList) {
+            let html  = '';
+            let inUL  = false;
+            let inOL  = false;
+ 
+            lines.forEach(l => {
+                if (isBullet(l)) {
+                    if (inOL) { html += '</ol>'; inOL = false; }
+                    if (!inUL) { html += '<ul>'; inUL = true; }
+                    html += `<li>${fmt(l.replace(/^[-*•]\s/, ''))}</li>`;
+                } else if (isOrdered(l)) {
+                    if (inUL) { html += '</ul>'; inUL = false; }
+                    if (!inOL) { html += '<ol>'; inOL = true; }
+                    html += `<li>${fmt(l.replace(/^\d+\.\s/, ''))}</li>`;
+                } else {
+                    if (inUL) { html += '</ul>'; inUL = false; }
+                    if (inOL) { html += '</ol>'; inOL = false; }
+                    html += `<p>${fmt(l)}</p>`;
+                }
+            });
+ 
+            if (inUL) html += '</ul>';
+            if (inOL) html += '</ol>';
+            return html;
+        }
+ 
+        // ── Plain paragraph ──────────────────────────────────────
+        return `<p>${lines.map(fmt).join('<br>')}</p>`;
+    });
+ 
+    return rendered.join('') || '<p>No response.</p>';
 }
 
 // ── INGEST ───────────────────────────────────────────────────────
@@ -627,7 +706,7 @@ function renderChatHistory() {
 }
 
 async function createNewChat() {
-    // 1. Clear server-side session so old file context is gone
+    // Clear server-side session FIRST so old file context is gone
     await fetch('/api/chat/clear-session', { method: 'POST' }).catch(() => {});
  
     try {
@@ -636,11 +715,11 @@ async function createNewChat() {
             subject: 'General',
             module:  'General',
         });
-        Chat.sessionID            = data.sessionID;
-        Chat.quiz                 = null;
-        Chat.activeQuizId         = null;
-        Chat.activeQuizMessageID  = null;
-        attachedFile              = null;        // clear any stale attachment
+        Chat.sessionID           = data.sessionID;
+        Chat.quiz                = null;
+        Chat.activeQuizId        = null;
+        Chat.activeQuizMessageID = null;
+        attachedFile             = null;
         removeAttachedFile();
         EL.messages.innerHTML = '';
         addMsg('assistant', 'New chat started. What would you like to study?');
@@ -652,29 +731,30 @@ async function createNewChat() {
 }
 
 async function loadChat(sessionID) {
-    // Reset all local state FIRST to prevent cross-session contamination
-    Chat.sessionID            = null;
-    Chat.quiz                 = null;
-    Chat.activeQuizId         = null;
-    Chat.activeQuizMessageID  = null;
-    attachedFile              = null;
+    // Reset ALL local state before switching sessions
+    Chat.sessionID           = null;
+    Chat.quiz                = null;
+    Chat.activeQuizId        = null;
+    Chat.activeQuizMessageID = null;
+    attachedFile             = null;
     removeAttachedFile();
  
-    // Tell Flask which session is now active (clears old file context)
+    // Tell Flask to forget the old active session cookie
     await fetch('/api/chat/clear-session', { method: 'POST' }).catch(() => {});
  
     try {
         const res  = await fetch(`/api/chat/session/${sessionID}`);
         if (!res.ok) throw new Error('Could not load chat');
         const data = await res.json();
+        // Set AFTER server call so the loaded session's history
+        // is correctly associated from this point forward
         Chat.sessionID = sessionID;
         EL.messages.innerHTML = '';
  
         (data.messages || []).forEach(msg => {
             if (msg.mode === 'quiz') {
-                try {
-                    addQuizBubble(JSON.parse(msg.content), { messageID: msg.messageID });
-                } catch { addMsg(msg.role, msg.content); }
+                try { addQuizBubble(JSON.parse(msg.content), { messageID: msg.messageID }); }
+                catch { addMsg(msg.role, msg.content); }
                 return;
             }
             if (msg.mode === 'quiz_result') {

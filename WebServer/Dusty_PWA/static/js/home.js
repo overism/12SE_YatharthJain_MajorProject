@@ -1,27 +1,29 @@
 /* ================================================================
    home.js  –  Dusty Dashboard
-   Loaded via <script defer> in home.html.
-   Handles: greeting, stats, subjects, tasks, timer widget,
-            search, draggable widget layout (SortableJS).
+   Fixes:
+   - taskID included in upcoming tasks from /api/progress
+   - Subject colours read from colourScheme (consistent with preferences)
+   - Task completion writes to DB and fires BroadcastChannel so
+     tasks.html / progress.html stay in sync without a reload
+   - Subscribes to the same channel so external completions reflect here
    ================================================================ */
 
 'use strict';
 
 /* ── CONSTANTS ── */
-const SUBJECT_COLOURS = window.SUBJECT_COLOURS || {
-    orange: '#f5761c', blue: '#2563eb', green: '#15803d',
-    red: '#dc2626', purple: '#7c3aed', yellow: '#d97706', amber: '#d97706', brown: '#92400e',
-    teal: '#0891b2', pink: '#be185d',
-};
-
 const TASK_BG = [
-    'rgba(248,165,163,.30)', 'rgba(255,229,153,.30)',
-    'rgba(170,230,220,.30)', 'rgba(216,183,234,.30)',
-    'rgba(183,220,228,.30)',
+    'rgba(248,165,163,.20)', 'rgba(255,229,153,.20)',
+    'rgba(170,230,220,.20)', 'rgba(216,183,234,.20)',
+    'rgba(183,220,228,.20)',
 ];
 const TASK_COL = ['#dc2626', '#d97706', '#0891b2', '#7c3aed', '#2563eb'];
-const CIRCUMFERENCE = 2 * Math.PI * 58; // SVG arc r=58
-const LAYOUT_KEY = 'dusty.dashboard.layout';
+const CIRCUMFERENCE = 2 * Math.PI * 58;
+const LAYOUT_KEY    = 'dusty.dashboard.layout';
+
+// BroadcastChannel for cross-page task updates
+const _taskChannel = typeof BroadcastChannel !== 'undefined'
+    ? new BroadcastChannel('dusty_tasks')
+    : null;
 
 /* ── BOOT ── */
 document.addEventListener('DOMContentLoaded', () => {
@@ -30,17 +32,22 @@ document.addEventListener('DOMContentLoaded', () => {
     initSortable();
     renderTimerFromShared();
     initSearch();
+
+    // Listen for task completions from other pages (tasks.html, progress.html)
+    if (_taskChannel) {
+        _taskChannel.onmessage = () => loadDashboard();
+    }
 });
 
 /* ── GREETING ── */
 function renderGreeting() {
-    const h = new Date().getHours();
+    const h   = new Date().getHours();
     const msg = h < 12
         ? "Good morning! Let's make today count."
         : h < 17
         ? "Good afternoon! Keep up the momentum."
         : "Good evening! A great time to review.";
-    const el = document.getElementById('greetingSub');
+    const el  = document.getElementById('greetingSub');
     if (el) el.textContent = msg;
 }
 
@@ -67,22 +74,20 @@ async function loadDashboard() {
     }
 }
 
-/* ── FIXED STATS STRIP ── */
+/* ── STATS STRIP ── */
 function renderStats(prog) {
     const strip = document.getElementById('statsStrip');
     if (!strip) return;
 
-    const tasks = prog.tasks    || {};
-    const sess  = prog.sessions || {};
-    const stats = tasks.stats   || [];
+    const tasks  = prog.tasks    || {};
+    const sess   = prog.sessions || {};
+    const stats  = tasks.stats   || [];
 
-    const total     = stats.reduce((a, b) => a + Number(b.count || 0), 0);
-    const done      = stats.find(s => s.status === 'completed')?.count || 0;
-    const hrs       = ((sess.total_time_spent_seconds || 0) / 3600).toFixed(1);
-    const streak    = Math.min(sess.completed_sessions || 0, 7);
-    const weekGoal  = total > 0
-        ? Math.min(Math.round(done / total * 100), 100) + '%'
-        : '0%';
+    const total   = stats.reduce((a, b) => a + Number(b.count || 0), 0);
+    const done    = stats.find(s => s.status === 'completed')?.count || 0;
+    const hrs     = ((sess.total_time_spent_seconds || 0) / 3600).toFixed(1);
+    const streak  = Math.min(sess.completed_sessions || 0, 7);
+    const weekPct = total > 0 ? Math.min(Math.round(done / total * 100), 100) + '%' : '0%';
 
     strip.innerHTML = `
         <div class="stat-card">
@@ -98,7 +103,7 @@ function renderStats(prog) {
             <div class="stat-card-lbl">Current Streak</div>
         </div>
         <div class="stat-card">
-            <div class="stat-card-val">${weekGoal}</div>
+            <div class="stat-card-val">${weekPct}</div>
             <div class="stat-card-lbl">Weekly Goal</div>
         </div>
     `;
@@ -115,16 +120,17 @@ function renderSubjects(subjects, subjectStats = []) {
     }
 
     const statsByName = {};
-    subjectStats.forEach(item => {
-        statsByName[item.subjectName] = item;
-    });
+    subjectStats.forEach(item => { statsByName[item.subjectName] = item; });
 
     el.innerHTML = subjects.map(s => {
-        const col = window.getSubjectColour ? window.getSubjectColour(s.colourScheme || 'orange') : (SUBJECT_COLOURS[s.colourScheme] || SUBJECT_COLOURS.orange);
-        const stat = statsByName[s.subjectName] || {};
-        const count = Number(stat.count || 0);
+        // ── FIX: always derive colour from the user's saved colourScheme ──
+        const col      = _subjectColour(s.colourScheme);
+        const stat     = statsByName[s.subjectName] || {};
+        const count    = Number(stat.count || 0);
         const progress = Math.round(Number(stat.avg_progress || 0));
-        const summary = count ? `${count} task${count === 1 ? '' : 's'} · ${progress}% avg` : 'No tasks yet';
+        const summary  = count
+            ? `${count} task${count === 1 ? '' : 's'} · ${progress}% avg`
+            : 'No tasks yet';
         return `
             <a class="subject-card" href="/tasks" style="background:${col}">
                 ${escH(s.subjectName)}
@@ -133,7 +139,7 @@ function renderSubjects(subjects, subjectStats = []) {
     }).join('');
 }
 
-/* ── UPCOMING TASKS (coloured rows) ── */
+/* ── UPCOMING TASKS ── */
 function renderTasks(tasks) {
     const el = document.getElementById('tasksList');
     if (!el) return;
@@ -147,36 +153,68 @@ function renderTasks(tasks) {
     el.innerHTML = tasks.slice(0, 5).map((t, i) => {
         const due     = new Date(t.dueDate);
         const days    = Math.ceil((due - today) / 86400000);
-        const col     = TASK_COL[i % TASK_COL.length];
+        // ── FIX: use subject colour if available, else index fallback ──
+        const col     = t.colourScheme ? _subjectColour(t.colourScheme) : TASK_COL[i % TASK_COL.length];
         const bg      = TASK_BG[i % TASK_BG.length];
         const isDone  = Number(t.progress) >= 100;
         const daysStr = days > 0 ? days + 'd' : days === 0 ? 'Today' : 'Overdue';
 
         return `
-            <div class="task-row ${isDone ? 'done' : ''}" style="background:${bg};color:${col}">
-                <div class="task-check" onclick="toggleTask(this)">${isDone ? '✓' : ''}</div>
+            <div class="task-row ${isDone ? 'done' : ''}"
+                 style="background:${bg};color:${col}"
+                 data-task-id="${t.taskID || ''}">
+                <div class="task-check"
+                     onclick="toggleTask(this)"
+                     title="Mark complete">${isDone ? '✓' : ''}</div>
                 <span class="task-name" style="color:#22140b">${escH(t.title)}</span>
                 <div class="task-days" style="background:${bg};color:${col}">${daysStr}</div>
             </div>`;
     }).join('');
 }
 
-/* Toggle task done state (visual only — full edit is in /tasks) */
-function toggleTask(btn) {
-    const row = btn.closest('.task-row');
+/* ── TASK COMPLETION (writes to DB, notifies other tabs) ── */
+async function toggleTask(btn) {
+    const row    = btn.closest('.task-row');
     if (!row) return;
-    row.classList.toggle('done');
-    btn.textContent = row.classList.contains('done') ? '✓' : '';
+    const taskID = row.dataset.taskId;
+    const isDone = !row.classList.contains('done');
+
+    // Optimistic UI
+    row.classList.toggle('done', isDone);
+    btn.textContent = isDone ? '✓' : '';
+
+    if (!taskID) return;
+
+    try {
+        const res = await fetch('/update_task', {
+            method:  'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body:    JSON.stringify({
+                taskID,
+                field: 'status',
+                value: isDone ? '100%' : '0%',
+            }),
+        });
+        if (!res.ok) throw new Error('Update failed');
+
+        // Notify tasks.html and progress.html via BroadcastChannel
+        if (_taskChannel) {
+            _taskChannel.postMessage({ type: 'task_updated', taskID, done: isDone });
+        }
+    } catch (err) {
+        // Revert optimistic UI on failure
+        row.classList.toggle('done', !isDone);
+        btn.textContent = !isDone ? '✓' : '';
+        console.error('[toggleTask]', err);
+    }
 }
 
-/* ── TIMER WIDGET — reads DustyStudyTimer from dusty.js ── */
+/* ── TIMER WIDGET ── */
 function renderTimerFromShared() {
     if (!window.DustyStudyTimer) {
-        // dusty.js loads with defer — retry until available
         setTimeout(renderTimerFromShared, 400);
         return;
     }
-
     DustyStudyTimer.subscribe(state => {
         const display = document.getElementById('dashTimerDisplay');
         const subPill = document.getElementById('dashTimerSubject');
@@ -186,14 +224,7 @@ function renderTimerFromShared() {
 
         display.textContent = DustyStudyTimer.formatTime(state.remainingSeconds);
         if (subPill) subPill.textContent = state.currentSubjectName || 'No subject';
-        if (playBtn) {
-            const icon = playBtn.querySelector('img');
-            if (icon) {
-                icon.src = state.isRunning
-                    ? "/static/images/pause-icon.svg"
-                    : "/static/images/play-icon.svg";
-            }
-        }
+        if (playBtn) playBtn.textContent = state.isRunning ? '⏸' : '▶';
 
         if (arc) {
             const total = Number(state.totalSeconds) || 3600;
@@ -204,12 +235,10 @@ function renderTimerFromShared() {
     });
 }
 
-/* Called by inline onclick in home.html */
 function dashTimerToggle() {
     if (!window.DustyStudyTimer) return;
     const s = DustyStudyTimer.getState();
-    if (s.isRunning) DustyStudyTimer.pauseTimer();
-    else             DustyStudyTimer.startTimer();
+    s.isRunning ? DustyStudyTimer.pauseTimer() : DustyStudyTimer.startTimer();
 }
 
 function dashTimerReset() {
@@ -217,9 +246,7 @@ function dashTimerReset() {
     DustyStudyTimer.resetTimer(true);
 }
 
-function goToTimer() {
-    window.location.href = '/timer';
-}
+function goToTimer() { window.location.href = '/timer'; }
 
 /* ── SEARCH ── */
 function initSearch() {
@@ -237,37 +264,25 @@ function doSearch() {
 
 /* ── WIDGET DRAG-AND-DROP ── */
 function initSortable() {
-    if (typeof Sortable === 'undefined') {
-        // SortableJS not yet loaded (edge case) — retry
-        setTimeout(initSortable, 200);
-        return;
-    }
-
-    const rows = ['sortRow0', 'sortRow1', 'sortRow2'];
-    rows.forEach(rowId => {
+    if (typeof Sortable === 'undefined') { setTimeout(initSortable, 200); return; }
+    ['sortRow0', 'sortRow1', 'sortRow2'].forEach(rowId => {
         const el = document.getElementById(rowId);
         if (!el) return;
         Sortable.create(el, {
-            animation: 200,
-            handle: '.drag-handle',
-            ghostClass: 'sortable-ghost',
-            chosenClass: 'sortable-chosen',
+            animation: 200, handle: '.drag-handle',
+            ghostClass: 'sortable-ghost', chosenClass: 'sortable-chosen',
             onEnd: saveLayout,
         });
     });
-
     restoreLayout();
 }
 
 function saveLayout() {
-    const rows = ['sortRow0', 'sortRow1', 'sortRow2'];
     const layout = {};
-    rows.forEach(rowId => {
+    ['sortRow0', 'sortRow1', 'sortRow2'].forEach(rowId => {
         const row = document.getElementById(rowId);
         if (!row) return;
-        layout[rowId] = [...row.children]
-            .map(w => w.dataset.widgetId)
-            .filter(Boolean);
+        layout[rowId] = [...row.children].map(w => w.dataset.widgetId).filter(Boolean);
     });
     try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(layout)); } catch {}
 }
@@ -276,7 +291,6 @@ function restoreLayout() {
     let layout;
     try { layout = JSON.parse(localStorage.getItem(LAYOUT_KEY) || 'null'); } catch { return; }
     if (!layout) return;
-
     Object.entries(layout).forEach(([rowId, order]) => {
         const row = document.getElementById(rowId);
         if (!row) return;
@@ -288,8 +302,20 @@ function restoreLayout() {
 }
 
 /* ── UTILITIES ── */
+function _subjectColour(scheme) {
+    if (!scheme) return '#f5761c';
+    if (window.getSubjectColour) return window.getSubjectColour(scheme);
+    // Fallback map matching subject-colours.js
+    const map = {
+        orange:'#f5761c', blue:'#2563eb', green:'#15803d',
+        red:'#dc2626',    purple:'#7c3aed', yellow:'#d97706',
+        amber:'#d97706',  brown:'#92400e',  teal:'#0891b2', pink:'#be185d',
+    };
+    return map[scheme] || '#f5761c';
+}
+
 function escH(v) {
     return String(v ?? '')
-        .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+        .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 }

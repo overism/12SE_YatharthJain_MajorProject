@@ -212,8 +212,8 @@
     flex-shrink: 0;
 }
 .chat-history-header h3 {
-    margin: 0; font-size: 11px; font-weight: 800;
-    color: #aaa; text-transform: uppercase; letter-spacing: .8px;
+    margin: 0; font-size: 15px; font-weight: 800;
+    color: #a36c47;
 }
 
 .chat-history-list {

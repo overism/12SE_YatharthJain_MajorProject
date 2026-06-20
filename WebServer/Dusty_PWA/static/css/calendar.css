@@ -221,6 +221,7 @@ html {
 .fc-toolbar-title {
     font-size: 2rem !important;
     font-weight: 700 !important;
+    font-family: 'Cooper BT', Arial, serif !important;
     background: linear-gradient(90deg, #f5761c, #ee4319) !important;
     -webkit-background-clip: text !important;
     -webkit-text-fill-color: transparent !important;

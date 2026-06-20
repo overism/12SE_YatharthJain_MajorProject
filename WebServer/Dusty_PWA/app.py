@@ -123,6 +123,8 @@ def ensure_runtime_schema():
     finally:
         conn.close()
 
+from RAG.warmup import warm_rag_on_startup
+warm_rag_on_startup()
 
 DEFAULT_SCHEDULER_SETTINGS = {
     'study_start': 8,
@@ -1183,7 +1185,7 @@ def create_task():
             task_type,
             progress,
             days_remaining,
-            'completed' if progress == 100 else 'in_progress' if progress > 0 else 'pending'
+            'completed' if progress == 100 else 'in progress' if progress > 0 else 'pending'
         ))
         conn.commit()
         task_id = cursor.lastrowid
@@ -1302,7 +1304,7 @@ def update_task():
                 if progress < 0 or progress > 100:
                     conn.close()
                     return jsonify({'error': 'Progress must be between 0 and 100'}), 400
-                status = 'completed' if progress == 100 else 'in_progress' if progress > 0 else 'pending'
+                status = 'completed' if progress == 100 else 'in progress' if progress > 0 else 'pending'
                 conn.execute('UPDATE tasks SET progress = ?, status = ? WHERE taskID = ?', 
                            (progress, status, task_id))
             except ValueError:
@@ -3060,7 +3062,7 @@ def create_timer_session():
         data = request.get_json() or {}
         user_id = session.get('user_id')
         status = data.get('status', 'completed')
-        valid_statuses = {'in_progress', 'paused', 'completed', 'abandoned'}
+        valid_statuses = {'in progress', 'paused', 'completed', 'abandoned'}
         
         if not data.get('subjectID'):
             return jsonify({'error': 'Missing required fields'}), 400
@@ -3094,7 +3096,7 @@ def update_timer_session(session_id):
         data = request.get_json() or {}
         user_id = session.get('user_id')
         status = data.get('status')
-        valid_statuses = {'in_progress', 'paused', 'completed', 'abandoned'}
+        valid_statuses = {'in progress', 'paused', 'completed', 'abandoned'}
 
         if status and status not in valid_statuses:
             return jsonify({'error': 'Invalid session status'}), 400
@@ -3179,64 +3181,75 @@ def get_progress():
     try:
         conn = get_db_connection()
  
-        # ── Task status counts ────────────────────────────────────
         task_stats = conn.execute(
-            '''SELECT status, COUNT(*) as count, AVG(progress) as avg_progress
-               FROM tasks WHERE userID = ? GROUP BY status''',
+            '''SELECT status,
+                      COUNT(*)        AS count,
+                      AVG(progress)   AS avg_progress
+               FROM tasks
+               WHERE userID = ?
+               GROUP BY status''',
             (user_id,)
         ).fetchall()
  
-        # ── Tasks by subject (includes avg progress + task count) ─
         tasks_by_subject = conn.execute(
             '''SELECT s.subjectName,
-                      COUNT(*)          AS count,
-                      AVG(t.progress)   AS avg_progress,
+                      s.colourScheme,
+                      COUNT(*)            AS count,
+                      AVG(t.progress)     AS avg_progress,
                       SUM(CASE WHEN t.status = 'completed' THEN 1 ELSE 0 END) AS completed
                FROM tasks t
                JOIN subjects s ON t.subjectID = s.subjectID
                WHERE t.userID = ?
-               GROUP BY s.subjectName
+               GROUP BY s.subjectName, s.colourScheme
                ORDER BY count DESC''',
             (user_id,)
         ).fetchall()
  
-        # ── Upcoming tasks ────────────────────────────────────────
+        # ── FIX: include taskID, subjectID, colourScheme ──────────────
         upcoming_tasks = conn.execute(
-            '''SELECT title, dueDate, progress
-               FROM tasks
-               WHERE userID = ? AND status != 'completed'
-               ORDER BY dueDate ASC LIMIT 6''',
+            '''SELECT t.taskID,
+                      t.title,
+                      t.dueDate,
+                      t.progress,
+                      t.status,
+                      s.subjectName,
+                      s.colourScheme,
+                      s.subjectID
+               FROM tasks t
+               LEFT JOIN subjects s ON t.subjectID = s.subjectID
+               WHERE t.userID = ?
+                 AND COALESCE(t.status, 'pending') != 'completed'
+                 AND t.dueDate IS NOT NULL
+               ORDER BY t.dueDate ASC
+               LIMIT 10''',
             (user_id,)
         ).fetchall()
  
-        # ── Timer session aggregates ──────────────────────────────
         session_stats = conn.execute(
             '''SELECT
                  COUNT(*)                                                        AS total_sessions,
-                 COALESCE(SUM(durationSeconds),    0)                            AS total_duration_seconds,
-                 COALESCE(SUM(timeSpentSeconds),   0)                            AS total_time_spent_seconds,
-                 SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END)           AS completed_sessions,
-                 SUM(CASE WHEN status = 'paused'    THEN 1 ELSE 0 END)           AS paused_sessions,
-                 SUM(CASE WHEN status = 'abandoned' THEN 1 ELSE 0 END)           AS abandoned_sessions
+                 COALESCE(SUM(durationSeconds),  0)                             AS total_duration_seconds,
+                 COALESCE(SUM(timeSpentSeconds), 0)                             AS total_time_spent_seconds,
+                 SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END)          AS completed_sessions,
+                 SUM(CASE WHEN status = 'paused'    THEN 1 ELSE 0 END)          AS paused_sessions,
+                 SUM(CASE WHEN status = 'abandoned' THEN 1 ELSE 0 END)          AS abandoned_sessions
                FROM timer_sessions
                WHERE userID = ?''',
             (user_id,)
         ).fetchone()
  
-        # ── NEW: Flashcard accuracy per subject ───────────────────
+        # ── Flashcard accuracy per subject ────────────────────────────
         flashcard_by_subject = conn.execute(
             '''SELECT
                  d.subject,
-                 COUNT(r.resultID)                                                      AS sessions,
-                 COALESCE(SUM(r.knew),   0)                                             AS total_knew,
-                 COALESCE(SUM(r.unsure), 0)                                             AS total_unsure,
-                 COALESCE(SUM(r.missed), 0)                                             AS total_missed,
-                 COALESCE(SUM(r.totalCards), 0)                                         AS total_cards,
+                 COUNT(r.resultID)                                              AS sessions,
+                 COALESCE(SUM(r.knew),       0)                                AS total_knew,
+                 COALESCE(SUM(r.unsure),     0)                                AS total_unsure,
+                 COALESCE(SUM(r.missed),     0)                                AS total_missed,
+                 COALESCE(SUM(r.totalCards), 0)                                AS total_cards,
                  ROUND(
-                     AVG(
-                         CAST(r.knew AS REAL) / MAX(r.totalCards, 1) * 100
-                     ), 1
-                 )                                                                       AS avg_accuracy_pct
+                     AVG(CAST(r.knew AS REAL) / MAX(r.totalCards, 1) * 100),
+                 1)                                                             AS avg_accuracy_pct
                FROM flashcard_results r
                JOIN flashcard_decks d ON r.deckID = d.deckID
                WHERE r.userID = ?
@@ -3245,16 +3258,17 @@ def get_progress():
             (user_id,)
         ).fetchall()
  
-        # ── NEW: Time-on-task per subject (from timer sessions) ───
+        # ── Time on task per subject ──────────────────────────────────
         time_by_subject = conn.execute(
             '''SELECT
                  s.subjectName,
+                 s.colourScheme,
                  COALESCE(SUM(ts.timeSpentSeconds), 0) AS total_seconds,
                  COUNT(ts.sessionID)                    AS session_count
                FROM timer_sessions ts
                JOIN subjects s ON ts.subjectID = s.subjectID
                WHERE ts.userID = ?
-               GROUP BY s.subjectName
+               GROUP BY s.subjectName, s.colourScheme
                ORDER BY total_seconds DESC''',
             (user_id,)
         ).fetchall()
@@ -3263,13 +3277,13 @@ def get_progress():
  
         return jsonify({
             'tasks': {
-                'stats':       [dict(r) for r in task_stats],
-                'by_subject':  [dict(r) for r in tasks_by_subject],
-                'upcoming':    [dict(r) for r in upcoming_tasks],
+                'stats':      [dict(r) for r in task_stats],
+                'by_subject': [dict(r) for r in tasks_by_subject],
+                'upcoming':   [dict(r) for r in upcoming_tasks],
             },
-            'sessions':          dict(session_stats),
-            'flashcard_stats':   [dict(r) for r in flashcard_by_subject],
-            'time_by_subject':   [dict(r) for r in time_by_subject],
+            'sessions':        dict(session_stats),
+            'flashcard_stats': [dict(r) for r in flashcard_by_subject],
+            'time_by_subject': [dict(r) for r in time_by_subject],
         })
     except Exception as e:
         print(f'[GET_PROGRESS] Error: {e}')
@@ -4026,23 +4040,57 @@ def api_chat():
         if file_context:
             context = file_context + '\n' + context
 
-        # ── Chat history from DB ──
+        # ── Chat history from DB ─────────────────────────────────────
+        # IMPORTANT: use the sessionID sent by the frontend, NOT the
+        # Flask session cookie — the cookie can be stale (pointing at a
+        # previous session that had file uploads) and causes Gemini to
+        # "remember" files that were never attached to this conversation.
         history_text = ''
+        frontend_session_id = None
+        if request.content_type and 'multipart' in request.content_type:
+            frontend_session_id = request.form.get('sessionID')
+        else:
+            frontend_session_id = (request.get_json() or {}).get('sessionID')
+ 
+        # Sync Flask session to match what the frontend says is active
+        if frontend_session_id:
+            try:
+                frontend_session_id = int(frontend_session_id)
+                session['active_chat_session'] = frontend_session_id
+            except (TypeError, ValueError):
+                frontend_session_id = None
+ 
+        active_sid = frontend_session_id or session.get('active_chat_session')
+ 
         try:
-            conn_hist = get_db_connection()
-            recent    = conn_hist.execute('''
-                SELECT role, content FROM chat_messages
-                WHERE sessionID = ?
-                ORDER BY createdAt DESC LIMIT 8
-            ''', (session.get('active_chat_session'),)).fetchall()
-            conn_hist.close()
-            recent = list(reversed(recent))
-            pairs  = []
-            for i in range(0, len(recent) - 1, 2):
-                if recent[i]['role'] == 'user' and recent[i+1]['role'] == 'assistant':
-                    pairs.append(f"Student: {recent[i]['content']}\nTutor: {recent[i+1]['content']}")
-            history_text = '\n'.join(pairs)
-        except Exception:
+            if active_sid:
+                conn_hist = get_db_connection()
+                # Only load history if the session actually belongs to this user
+                owns = conn_hist.execute(
+                    'SELECT sessionID FROM chat_sessions WHERE sessionID=? AND userID=?',
+                    (active_sid, session.get('user_id'))
+                ).fetchone()
+                if owns:
+                    recent = conn_hist.execute('''
+                        SELECT role, content, mode FROM chat_messages
+                        WHERE sessionID = ?
+                          AND mode NOT IN ('quiz', 'quiz_result')
+                        ORDER BY createdAt DESC LIMIT 8
+                    ''', (active_sid,)).fetchall()
+                    conn_hist.close()
+                    recent = list(reversed(recent))
+                    pairs  = []
+                    for i in range(0, len(recent) - 1, 2):
+                        if recent[i]['role'] == 'user' and recent[i+1]['role'] == 'assistant':
+                            pairs.append(
+                                f"Student: {recent[i]['content']}\n"
+                                f"Tutor: {recent[i+1]['content']}"
+                            )
+                    history_text = '\n'.join(pairs)
+                else:
+                    conn_hist.close()
+        except Exception as hist_exc:
+            print(f'[CHAT_HISTORY] {hist_exc}')
             history_text = ''
 
         # ── Build prompt ──
@@ -4389,7 +4437,6 @@ def clear_history():
 @app.route('/api/chat/clear-session', methods=['POST'])
 @login_required
 def clear_chat_session():
-    """Clear server-side chat context so old file references don't bleed."""
     session.pop('active_chat_session', None)
     session.pop('active_quiz', None)
     return jsonify({'ok': True})
