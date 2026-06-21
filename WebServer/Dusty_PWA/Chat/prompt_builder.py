@@ -199,10 +199,22 @@ def build_flashcards_prompt(
     return f"""You are an expert NSW HSC tutor for {subject}.
 
 {_resource_block(retrieved_chunks_text)}
-Create {card_count} study flashcards.
-Subject: {subject}  |  Module: {module}
+Create {card_count} flashcards STRICTLY limited to NSW HSC {subject} syllabus content.
+Subject: {subject}  |  Module / Topic: {module}
 
-Return ONLY valid JSON — no markdown fences, no commentary:
+SYLLABUS CONSTRAINT — CRITICAL:
+- Only include content explicitly in the NSW HSC {subject} syllabus for this topic.
+- Do NOT include university-level content, overseas curricula, or anything outside NSW HSC scope.
+- If the module name is not a recognised NSW HSC topic, create cards on the closest valid
+  NSW HSC {subject} content and note this in the title field.
+
+JSON OUTPUT RULES — READ CAREFULLY:
+- Return ONLY a valid JSON object. No markdown fences, no commentary, no text before or after.
+- For mathematical expressions, prefer plain Unicode (x², π, ≤, ∫) over LaTeX where possible.
+- If LaTeX is required, double-escape every backslash: write "\\\\frac{{1}}{{2}}" not "\\frac{{1}}{{2}}".
+- Never place raw single backslashes inside JSON string values — this breaks JSON parsing.
+
+YOUR RESPONSE MUST START WITH {{ AND END WITH }}, NOTHING ELSE:
 {{
   "title": "{subject} — {module} flashcards",
   "subject": "{subject}",
@@ -217,7 +229,7 @@ Return ONLY valid JSON — no markdown fences, no commentary:
   ]
 }}
 
-Provide exactly {card_count} flashcards. Use HSC-level language and key definitions."""
+Provide exactly {card_count} flashcards covering key NSW HSC definitions, formulas, and concepts."""
 
 
 # ── QUIZ MARKING ──────────────────────────────────────────────────

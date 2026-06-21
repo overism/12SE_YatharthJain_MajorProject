@@ -267,23 +267,24 @@ def _repair_json_text(text: str) -> str:
     # Remove stray comments
     text = re.sub(r'//.*$', '', text, flags=re.MULTILINE)
     text = re.sub(r'/\*.*?\*/', '', text, flags=re.DOTALL)
-    
+
     # Remove trailing commas before } or ]
     text = re.sub(r',\s*([}\]])', r'\1', text)
-    
+
+    # Fix unescaped backslashes inside string values (common with LaTeX output).
+    # Replace lone backslashes that aren't part of a valid JSON escape sequence.
+    text = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', text)
+
     # Fix common issues
-    # - Unmatched/odd quotes
     if text.count('"') % 2 == 1:
         text += '"'
-    
-    # - Unbalanced braces
+
     open_braces = text.count('{') - text.count('}')
     if open_braces > 0:
         text += '}' * open_braces
-    
-    # - Unbalanced brackets
+
     open_brackets = text.count('[') - text.count(']')
     if open_brackets > 0:
         text += ']' * open_brackets
-    
+
     return text

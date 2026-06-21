@@ -3481,26 +3481,53 @@ def delete_user_upload(filename):
 def generate_flashcards():
     data = request.get_json() or {}
     subject = data.get('subject', 'General').strip() or 'General'
-    module = data.get('module', '').strip() or 'General'
-    count = min(max(int(data.get('count', 5) or 5), 3), 12)
+    module  = data.get('module', '').strip()  or 'General'
+    count   = min(max(int(data.get('count', 5) or 5), 3), 12)
+
+    # ── Syllabus validation ───────────────────────────────────────
+    try:
+        from RAG.syllabus_topics import SYLLABUS_TOPICS
+        if subject in SYLLABUS_TOPICS and module not in ('General', ''):
+            subject_data = SYLLABUS_TOPICS[subject]
+            known_modules = [m['module'] for m in subject_data]
+            known_topics  = [t for m in subject_data for t in m.get('topics', [])]
+            all_known     = known_modules + known_topics
+
+            # Fuzzy check: does the input overlap with any known module/topic?
+            mod_lower = module.lower()
+            matched = any(
+                mod_lower in k.lower() or k.lower() in mod_lower
+                for k in all_known
+            )
+            if not matched:
+                suggestions = ', '.join(f'"{m}"' for m in known_modules[:4])
+                return jsonify({
+                    'error': (
+                        f'"{module}" is not a recognised NSW HSC {subject} module or topic. '
+                        f'Try one of: {suggestions}. '
+                        f'You can also browse modules in the Quiz generator.'
+                    )
+                }), 400
+    except ImportError:
+        pass  # Syllabus topics not available — proceed without validation
 
     try:
-        from RAG.retriever import retrieve, format_chunks_for_prompt
+        from RAG.retriever    import retrieve, format_chunks_for_prompt
         from Chat.prompt_builder import build_flashcards_prompt
-        from Chat.gemini_client import ask_gemini_json
+        from Chat.gemini_client  import ask_gemini_json
 
-        chunks = retrieve(f'Generate HSC flashcards for {subject}', subject=subject, n_results=5)
-        context = format_chunks_for_prompt(chunks)
-        prompt = build_flashcards_prompt(subject, module, count, context)
+        chunks   = retrieve(f'NSW HSC {subject} {module} flashcards', subject=subject, n_results=5)
+        context  = format_chunks_for_prompt(chunks)
+        prompt   = build_flashcards_prompt(subject, module, count, context)
         response = ask_gemini_json(prompt)
 
         if not isinstance(response, dict) or not response.get('flashcards'):
-            return jsonify({'error': 'Flashcard generator returned invalid data'}), 500
+            return jsonify({'error': 'Flashcard generator returned invalid data. Please try again.'}), 500
 
         return jsonify({
-            'title': response.get('title', f'{subject} flashcards'),
-            'subject': response.get('subject', subject),
-            'module': response.get('module', module),
+            'title':      response.get('title', f'{subject} — {module} flashcards'),
+            'subject':    response.get('subject', subject),
+            'module':     response.get('module',  module),
             'flashcards': response.get('flashcards', [])
         })
     except Exception as e:

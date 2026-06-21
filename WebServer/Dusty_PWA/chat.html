@@ -21,6 +21,92 @@
     <script defer src="{{ url_for('static', filename='js/subject-colours.js') }}"></script>
     <script defer src="{{ url_for('static', filename='js/dusty.js') }}"></script>
     <script defer src="{{ url_for('static', filename='js/chat.js') }}"></script>
+    <style>
+        /* ── CHAT WELCOME SCREEN ── */
+        .chat-welcome {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            overflow-y: auto;
+        }
+        .chat-welcome.hidden { display: none; }
+
+        .welcome-content {
+            text-align: center;
+            max-width: 580px;
+            width: 100%;
+        }
+
+        .welcome-logo {
+            width: 180px;
+            margin: 0 auto 20px;
+        }
+        .welcome-logo img {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            filter: drop-shadow(0 8px 24px rgba(245,118,28,.25));
+        }
+
+        .welcome-heading {
+            font-size: clamp(1.4rem, 3vw, 2rem);
+            font-weight: 700;
+            color: #22140b;
+            font-family: 'Cooper BT', Arial, serif;
+            margin: 0 0 10px;
+            background: linear-gradient(90deg,#f5761c,#ee4319);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .welcome-sub {
+            font-size: 14.5px;
+            color: #888;
+            margin: 0 0 28px;
+            line-height: 1.6;
+        }
+
+        .welcome-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+        }
+
+        .welcome-chip {
+            padding: 10px 16px;
+            border: 1.5px solid rgba(245,118,28,.22);
+            border-radius: 999px;
+            background: rgba(245,118,28,.05);
+            color: #8a4a0a;
+            font-size: 13.5px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all .18s ease;
+            white-space: nowrap;
+        }
+        .welcome-chip:hover {
+            background: rgba(245,118,28,.12);
+            border-color: rgba(245,118,28,.5);
+            color: #c85010;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(245,118,28,.15);
+        }
+
+        /* Hide messages div when welcome is shown */
+        .messages.welcome-active {
+            display: none;
+        }
+
+        @media (max-width: 600px) {
+            .welcome-chips { gap: 8px; }
+            .welcome-chip  { font-size: 12.5px; padding: 8px 13px; }
+        }
+    </style>
 </head>
 <body>
 <script id="chatUserData" type="application/json">
@@ -91,6 +177,24 @@
 
         <!-- CENTRE: Conversation -->
         <section class="chat-main" aria-label="Conversation">
+            
+            <div class="chat-welcome" id="chatWelcome">
+                <div class="welcome-content">
+                    <div class="welcome-logo">
+                        <img src="{{ url_for('static', filename='images/transp512-short.png') }}" alt="Dusty">
+                    </div>
+                    <h2 class="welcome-heading">How can I help you study?</h2>
+                    <p class="welcome-sub">Ask me anything about your HSC subjects — I'll explain, quiz, and mark your responses.</p>
+                    <div class="welcome-chips">
+                        <button class="welcome-chip" onclick="insertWelcomePrompt('Explain integration by parts step by step')">Integration by parts</button>
+                        <button class="welcome-chip" onclick="insertWelcomePrompt('Give me a practice Chemistry question on equilibrium')">Chemistry practice</button>
+                        <button class="welcome-chip" onclick="insertWelcomePrompt('Help me understand Module B for English Advanced')">English Module B</button>
+                        <button class="welcome-chip" onclick="insertWelcomePrompt('What are the key concepts in Software Engineering?')">Software Engineering</button>
+                        <button class="welcome-chip" onclick="insertWelcomePrompt('Generate a quiz on Mathematics Advanced — Calculus')">Maths quiz</button>
+                        <button class="welcome-chip" onclick="insertWelcomePrompt('Mark my essay on belonging')">Mark my essay</button>
+                    </div>
+                </div>
+            </div>
 
             <div class="messages" id="messages" aria-live="polite" aria-label="Chat messages">
                 <!-- Populated by JS on load -->

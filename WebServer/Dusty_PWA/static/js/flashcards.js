@@ -302,14 +302,36 @@ function renderCard() {
     document.getElementById('flipHintBtn').textContent = 'Flip Card';
 
     document.getElementById('cardQuestion').textContent = card.question || card.prompt || '';
-    document.getElementById('cardAnswer').textContent = card.answer || card.definition || '';
+    document.getElementById('cardAnswer').textContent   = card.answer   || card.definition || '';
 
-    const hint = card.hint || card.tip || '';
+    const hint  = card.hint || card.tip || '';
     const hintEl = document.getElementById('cardHint');
     if (hint) { hintEl.textContent = '💡 ' + hint; hintEl.style.display = ''; }
-    else { hintEl.style.display = 'none'; }
+    else       { hintEl.style.display = 'none'; }
 
-    document.getElementById('cardCounter').textContent = `Card ${FC.currentIndex + 1} of ${deck.flashcards.length}`;
+    document.getElementById('cardCounter').textContent =
+        `Card ${FC.currentIndex + 1} of ${deck.flashcards.length}`;
+
+    // Render maths (KaTeX)
+    renderCardMath();
+}
+
+function renderCardMath() {
+    if (!window.renderMathInElement) return;
+    const stage = document.querySelector('.card-stage');
+    if (!stage) return;
+    try {
+        renderMathInElement(stage, {
+            delimiters: [
+                { left: '$$', right: '$$', display: true  },
+                { left: '$',  right: '$',  display: false },
+                { left: '\\[', right: '\\]', display: true  },
+                { left: '\\(', right: '\\)', display: false },
+            ],
+            throwOnError: false,
+            output: 'html',
+        });
+    } catch (e) { /* KaTeX not yet ready */ }
 }
 
 function flipCard() {
@@ -317,6 +339,7 @@ function flipCard() {
     document.getElementById('cardFlip').classList.toggle('flipped', FC.flipped);
     document.getElementById('trafficControls').style.display = FC.flipped ? 'flex' : 'none';
     document.getElementById('flipHintBtn').textContent = FC.flipped ? 'Show Question' : 'Flip Card';
+    renderCardMath();
 }
 
 function nextCard() {

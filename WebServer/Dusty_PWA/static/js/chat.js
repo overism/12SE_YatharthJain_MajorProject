@@ -20,6 +20,26 @@ const Chat = {
 const EL = {};
 let attachedFile = null;
 
+// ── WELCOME SCREEN ────────────────────────────────────────────────
+function showWelcome() {
+    document.getElementById('chatWelcome')?.classList.remove('hidden');
+    EL.messages?.classList.add('welcome-active');
+}
+
+function hideWelcome() {
+    document.getElementById('chatWelcome')?.classList.add('hidden');
+    EL.messages?.classList.remove('welcome-active');
+}
+
+function insertWelcomePrompt(text) {
+    hideWelcome();
+    if (EL.input) {
+        EL.input.value = text;
+        resizeTextarea();
+        EL.input.focus();
+    }
+}
+
 // ── CONSTANTS ────────────────────────────────────────────────────
 const PLACEHOLDERS = {
     tutor:    'Ask Dusty about any HSC topic…',
@@ -92,6 +112,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     setMode('tutor');
     checkKB();
     await loadChatSessions();
+    showWelcome();
     await createNewChat();
 
     setTimeout(() => {
@@ -474,6 +495,7 @@ function addQuizResultBubble(result) {
 
 // ── MESSAGES ─────────────────────────────────────────────────────
 function addMsg(role, text) {
+    hideWelcome();
     const art = document.createElement('article');
     art.className = `message ${role}`;
     const av  = document.createElement('div');
@@ -489,6 +511,7 @@ function addMsg(role, text) {
 }
 
 function addRawMsg(role, html) {
+    hideWelcome();
     const art = document.createElement('article');
     art.className = `message ${role}`;
     const av  = document.createElement('div');
@@ -720,50 +743,23 @@ function renderChatHistory() {
 }
 
 async function createNewChat() {
-    await fetch('/api/chat/clear-session', {
-        method: 'POST'
-    }).catch(() => {});
+    // Tell server to clear the active session cookie
+    await fetch('/api/chat/clear-session', { method: 'POST' }).catch(() => {});
 
-    const res = await fetch('/api/chat/sessions');
-    if (!res.ok) return;
+    // Reset local state
+    Chat.sessionID           = null;
+    Chat.quiz                = null;
+    Chat.activeQuizId        = null;
+    Chat.activeQuizMessageID = null;
+    attachedFile             = null;
+    removeAttachedFile();
 
-    const seshes = await res.json();
-    Chat.sessions = seshes.sessions || [];
+    // Clear messages and show welcome screen
+    if (EL.messages) EL.messages.innerHTML = '';
+    showWelcome();
 
-    const hasUntitledChat = Chat.sessions.some(
-        sess => sess.title === 'Untitled Chat'
-    );
-
-    if (!hasUntitledChat) {
-        try {
-            const data = await postJSON('/api/chat/session', {
-                title: 'Untitled Chat',
-                subject: 'General',
-                module: 'General'
-            });
-
-            Chat.sessionID = data.sessionID;
-            Chat.quiz = null;
-            Chat.activeQuizId = null;
-            Chat.activeQuizMessageID = null;
-
-            attachedFile = null;
-            removeAttachedFile();
-
-            EL.messages.innerHTML = '';
-
-            addMsg(
-                'assistant',
-                'New chat started. What would you like to study?'
-            );
-
-            await loadChatSessions();
-
-            showToast('New chat created', 'info');
-        } catch (err) {
-            showToast(err.message, 'error');
-        }
-    }
+    // Create a session in the background (session will be assigned on first message)
+    await loadChatSessions();
 }
 
 async function loadChat(sessionID) {
@@ -807,6 +803,8 @@ async function loadChat(sessionID) {
             }
             addMsg(msg.role, msg.content);
         });
+
+        hideWelcome();
  
         renderChatHistory();
     } catch (err) {
