@@ -177,27 +177,92 @@ def ask_gemini_json(
     raw = ask_gemini(prompt, temperature=temperature, max_output_tokens=max_output_tokens)
     return _parse_json(raw)
 
+def _fix_latex_backslashes(text: str) -> str:
+    VALID_SINGLE = {'"', '\\', '/', 'b', 'f', 'n', 'r', 't'}
+    result: list[str] = []
+    in_string = False
+    i, n = 0, len(text)
+
+    while i < n:
+        ch = text[i]
+
+        if not in_string:
+            result.append(ch)
+            if ch == '"':
+                in_string = True
+            i += 1
+            continue
+
+        # ── inside a JSON string value ──────────────────────────
+        if ch == '\\':
+            if i + 1 < n:
+                nc = text[i + 1]
+                if nc in VALID_SINGLE:
+                    # Valid single-char escape — keep
+                    result.append(ch); result.append(nc); i += 2
+                elif (nc == 'u' and i + 5 < n
+                      and all(c in '0123456789abcdefABCDEF'
+                              for c in text[i + 2:i + 6])):
+                    # Valid \uXXXX — keep
+                    result.extend(text[i:i + 6]); i += 6
+                else:
+                    # LaTeX or other invalid escape — double the backslash
+                    result.append('\\'); result.append('\\'); i += 1
+            else:
+                result.append('\\'); result.append('\\'); i += 1
+        elif ch == '"':
+            result.append(ch)
+            in_string = False
+            i += 1
+        else:
+            result.append(ch)
+            i += 1
+
+    return ''.join(result)
+
 
 def _parse_json(text: str) -> dict | list:
     """Strip markdown fences and parse JSON. Raises RuntimeError on failure."""
     cleaned = text.strip()
 
-    # Use regex to remove markdown code fences more reliably
-    cleaned = re.sub(r'^```(?:json)?\n?', '', cleaned, flags=re.MULTILINE)
-    cleaned = re.sub(r'\n?```$', '', cleaned)
-    cleaned = cleaned.strip()
+    # Strip opening fence from the VERY START only (not every line — avoid
+    # corrupting question text that legitimately starts with backticks)
+    if cleaned.startswith('```'):
+        first_newline = cleaned.find('\n')
+        if first_newline != -1:
+            cleaned = cleaned[first_newline + 1:].strip()
+        else:
+            cleaned = cleaned.lstrip('`')
+            if cleaned.lower().startswith('json'):
+                cleaned = cleaned[4:].strip()
 
-    # Some models prefix with 'json\n'
-    if cleaned.lower().startswith("json"):
-        cleaned = cleaned[4:].strip()
+    # Strip closing fence from the VERY END only
+    if cleaned.endswith('```'):
+        last_fence = cleaned.rfind('\n```')
+        if last_fence != -1:
+            cleaned = cleaned[:last_fence].strip()
+        else:
+            cleaned = cleaned[:-3].strip()
 
-    # Try direct parse first
+    # Some models prefix with 'json\n' after stripping
+    if cleaned.lower().startswith('json\n'):
+        cleaned = cleaned[5:].strip()
+
+    # 1. Direct parse
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
         pass
 
-    # Extract the first balanced JSON object or array
+    # 2. Fix LaTeX / unescaped backslashes (common in maths quizzes)
+    latex_fixed = _fix_latex_backslashes(cleaned)
+    if latex_fixed != cleaned:
+        try:
+            return json.loads(latex_fixed)
+        except json.JSONDecodeError:
+            cleaned = latex_fixed   # carry fixed version forward
+
+    # 3. Extract first balanced JSON object or array
     extracted = _extract_balanced_json(cleaned)
     if extracted:
         try:
@@ -205,7 +270,7 @@ def _parse_json(text: str) -> dict | list:
         except json.JSONDecodeError:
             pass
 
-    # Try minor repairs
+    # 4. Minor structural repairs
     repaired = _repair_json_text(cleaned)
     if repaired != cleaned:
         try:
@@ -213,7 +278,6 @@ def _parse_json(text: str) -> dict | list:
         except json.JSONDecodeError:
             pass
 
-    # All attempts failed
     raise RuntimeError(
         f"Gemini did not return valid JSON. "
         f"Raw response (first 300 chars): {text[:300]!r}"

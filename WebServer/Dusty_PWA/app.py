@@ -19,7 +19,7 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from datetime import datetime, timedelta
 import scheduler
-import secrets
+load_dotenv()
 
 basedir = os.path.abspath(os.path.dirname(__file__))
 GOOGLE_SCOPES = ['https://www.googleapis.com/auth/calendar']
@@ -40,7 +40,15 @@ app = Flask(
     template_folder = basedir,
     static_folder = os.path.join(basedir, 'static')
 )
-app.secret_key = secrets.token_hex(32)
+_secret_key = os.getenv('SECRET_KEY')
+if not _secret_key:
+    import hashlib, socket
+    # Stable per-machine fallback — not random on every restart
+    _secret_key = hashlib.sha256(socket.gethostname().encode()).hexdigest()
+    print("[WARN] SECRET_KEY not set in .env — using hostname-derived key. "
+          "Sessions will persist across restarts but are not cryptographically unique. "
+          "Set SECRET_KEY in your .env file for production.")
+app.secret_key = _secret_key
 CORS(app)
 
 @app.context_processor
@@ -454,15 +462,28 @@ def api_get_subjects():
 @app.route('/api/syllabus/topics', methods=['GET'])
 @login_required
 def api_syllabus_topics():
-    from RAG.syllabus_topics import SYLLABUS_TOPICS, get_subjects
+    from RAG.syllabus_topics import SYLLABUS_TOPICS, get_subjects, find_best_match
 
-    subject = request.args.get('subject')
-    if subject and subject in SYLLABUS_TOPICS:
-        return jsonify({'subject': subject, 'modules': SYLLABUS_TOPICS[subject]})
+    subject = (request.args.get('subject') or '').strip()
+
+    if subject:
+        matched_key = find_best_match(subject)
+        if matched_key:
+            return jsonify({
+                'subject':  subject,
+                'matched':  matched_key,
+                'modules':  SYLLABUS_TOPICS[matched_key],
+            })
+        # No match at all — return empty so the UI shows a text input
+        return jsonify({
+            'subject': subject,
+            'matched': None,
+            'modules': [],
+        })
 
     return jsonify({
         'subjects': get_subjects(),
-        'modules': SYLLABUS_TOPICS['General'],
+        'modules':  [],
     })
 
 @app.route('/debug_session')
@@ -1185,7 +1206,7 @@ def create_task():
             task_type,
             progress,
             days_remaining,
-            'completed' if progress == 100 else 'in progress' if progress > 0 else 'pending'
+            'completed' if progress == 100 else 'in_progress' if progress > 0 else 'pending'
         ))
         conn.commit()
         task_id = cursor.lastrowid
@@ -1304,7 +1325,7 @@ def update_task():
                 if progress < 0 or progress > 100:
                     conn.close()
                     return jsonify({'error': 'Progress must be between 0 and 100'}), 400
-                status = 'completed' if progress == 100 else 'in progress' if progress > 0 else 'pending'
+                status = 'completed' if progress == 100 else 'in_progress' if progress > 0 else 'pending'
                 conn.execute('UPDATE tasks SET progress = ?, status = ? WHERE taskID = ?', 
                            (progress, status, task_id))
             except ValueError:
@@ -3062,7 +3083,7 @@ def create_timer_session():
         data = request.get_json() or {}
         user_id = session.get('user_id')
         status = data.get('status', 'completed')
-        valid_statuses = {'in progress', 'paused', 'completed', 'abandoned'}
+        valid_statuses = {'in_progress', 'paused', 'completed', 'abandoned'}
         
         if not data.get('subjectID'):
             return jsonify({'error': 'Missing required fields'}), 400
@@ -3096,7 +3117,7 @@ def update_timer_session(session_id):
         data = request.get_json() or {}
         user_id = session.get('user_id')
         status = data.get('status')
-        valid_statuses = {'in progress', 'paused', 'completed', 'abandoned'}
+        valid_statuses = {'in_progress', 'paused', 'completed', 'abandoned'}
 
         if status and status not in valid_statuses:
             return jsonify({'error': 'Invalid session status'}), 400

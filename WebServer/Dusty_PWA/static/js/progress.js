@@ -413,7 +413,16 @@ function renderSessionsTable(sessions) {
 }
 
 function destroyChart(id) {
+    // Destroy tracked instance
     if (charts[id]) { charts[id].destroy(); delete charts[id]; }
+    // Also destroy any orphaned instance Chart.js still holds (e.g. after navigation)
+    try {
+        const canvas = document.getElementById(id);
+        if (canvas) {
+            const orphan = Chart.getChart(canvas);
+            if (orphan) orphan.destroy();
+        }
+    } catch (_) {}
 }
 
 function showEmpty(id) {

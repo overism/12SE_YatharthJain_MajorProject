@@ -30,6 +30,13 @@ function showPopup(title, message, onClose = null) {
     };
 }
 
+const dustyAppPages = ['/home', '/timer', '/tasks', '/chat', '/calendar', '/flashcards', '/resources', '/progress'];
+
+function isDustyAppPage() {
+  const normalizedPath = window.location.pathname.replace(/\/$/, '');
+  return dustyAppPages.some(page => normalizedPath === page || normalizedPath.startsWith(page + '/'));
+}
+
 function initLoginForm() {
     const loginForm = document.getElementById('loginForm');
     if (!loginForm) return;
@@ -518,13 +525,6 @@ window.addEventListener('DOMContentLoaded', ensureSidebarDrawer);
     document.getElementById('dustyWidgetTime').textContent = formatTime(state.remainingSeconds);
     document.getElementById('dustyWidgetSubject').textContent = state.currentSubjectName || 'No subject';
     document.getElementById('dustyWidgetToggle').textContent = state.isRunning ? 'Pause' : 'Start';
-  }
-
-  const dustyAppPages = ['/home', '/timer', '/tasks', '/chat', '/calendar', '/flashcards', '/resources', '/progress'];
-
-  function isDustyAppPage() {
-    const normalizedPath = window.location.pathname.replace(/\/$/, '');
-    return dustyAppPages.some(page => normalizedPath === page || normalizedPath.startsWith(page + '/'));
   }
 
   document.addEventListener('DOMContentLoaded', () => {
@@ -1130,16 +1130,9 @@ function closePrefsModal() {
 
 document.addEventListener('DOMContentLoaded', async () => {
   // Detect hard reload and log out
-    const navEntry = performance.getEntriesByType('navigation')[0];
-    const isReload = navEntry?.type === 'reload';
-    const isAppPage = isDustyAppPage();
-
-    if (isReload && isAppPage) {
-        // Use sendBeacon so the request completes even as we redirect
-        navigator.sendBeacon('/logout');
-        window.location.replace('/login');
-        return;
-    }
+  const navEntry = performance.getEntriesByType('navigation')[0];
+  const isReload = navEntry?.type === 'reload';
+  const isAppPage = isDustyAppPage();
   
   const path = window.location.pathname.replace(/\/$/, '');
     if (!isDustyAppPage() || path === '/signup' || sessionStorage.getItem('dusty.skipSchedulerOnboarding') === '1') return;

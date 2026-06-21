@@ -284,45 +284,103 @@ async function openQuizModal() {
 async function loadQuizModules(subject) {
     const moduleSelect = document.getElementById('quizModuleSelect');
     const topicSelect  = document.getElementById('quizTopicSelect');
+    moduleSelect.innerHTML = '<option>Loading…</option>';
+    topicSelect.innerHTML  = '';
 
     try {
         const res  = await fetch(`/api/syllabus/topics?subject=${encodeURIComponent(subject)}`);
         const data = await res.json();
-        QuizModal.modules = data.modules || [];
-    } catch { QuizModal.modules = []; }
+        // Filter out "Custom Topic" / "General" catch-all modules
+        QuizModal.modules = (data.modules || []).filter(
+            m => m.module && m.module !== 'Custom Topic'
+        );
+    } catch {
+        QuizModal.modules = [];
+    }
 
     if (!QuizModal.modules.length) {
-        moduleSelect.innerHTML = '<option value="Custom Topic">Custom Topic</option>';
-        topicSelect.innerHTML  = '<option value="">Describe in chat instead</option>';
+        // No syllabus data — fall back to a free-text topic input
+        moduleSelect.innerHTML = `<option value="__freetext__">Enter topic below</option>`;
+        topicSelect.innerHTML  = `<option value="__freetext__">I will describe it below</option>`;
+        // Show the free-text input
+        _showQuizFreetext(true);
         return;
     }
 
-    moduleSelect.innerHTML = QuizModal.modules.map((m, i) => `<option value="${i}">${escH(m.module)}</option>`).join('');
-    moduleSelect.onchange  = () => loadQuizTopics(Number(moduleSelect.value));
+    _showQuizFreetext(false);
+    moduleSelect.innerHTML = QuizModal.modules.map((m, i) =>
+        `<option value="${i}">${escH(m.module)}</option>`
+    ).join('');
+    moduleSelect.onchange = () => loadQuizTopics(Number(moduleSelect.value));
     loadQuizTopics(0);
 }
 
 function loadQuizTopics(moduleIdx) {
     const topicSelect = document.getElementById('quizTopicSelect');
-    const topics = QuizModal.modules[moduleIdx]?.topics || [];
-    topicSelect.innerHTML = topics.length
-        ? topics.map(t => `<option value="${escH(t)}">${escH(t)}</option>`).join('')
-        : '<option value="">Describe in chat instead</option>';
+    const topics = (QuizModal.modules[moduleIdx]?.topics || []);
+
+    if (!topics.length) {
+        topicSelect.innerHTML = `<option value="">Any topic in this module</option>`;
+        return;
+    }
+    topicSelect.innerHTML = topics.map(t =>
+        `<option value="${escH(t)}">${escH(t)}</option>`
+    ).join('');
 }
 
-function closeQuizModal() { document.getElementById('quizGenModal').classList.add('hidden'); }
+// Show/hide the free-text fallback input
+function _showQuizFreetext(show) {
+    let box = document.getElementById('quizFreetextWrap');
+    if (!box) {
+        box = document.createElement('div');
+        box.id = 'quizFreetextWrap';
+        box.style.cssText = 'margin-top:14px';
+        box.innerHTML = `
+            <label style="display:block;margin-bottom:7px;font-weight:700;font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#333">
+                Describe the topic
+            </label>
+            <input id="quizFreetextInput" type="text"
+                placeholder="e.g. Trigonometric identities, Projectile motion…"
+                style="width:100%;padding:15px 20px;border:2px solid #e1e5e9;border-radius:12px;font-size:16px;font-family:inherit;color:#22140b;outline:none"
+                onfocus="this.style.borderColor='#f5761c'"
+                onblur="this.style.borderColor='#e1e5e9'">`;
+        // Insert after topic select's parent
+        document.getElementById('quizTopicSelect')?.closest('.form-group')
+            ?.insertAdjacentElement('afterend', box);
+    }
+    box.style.display = show ? '' : 'none';
+}
 
 async function submitQuizModal() {
     const subject    = document.getElementById('quizSubjectSelect').value || 'General';
-    const moduleIdx  = Number(document.getElementById('quizModuleSelect').value || 0);
-    const moduleName = QuizModal.modules[moduleIdx]?.module || 'Custom Topic';
-    const topic      = document.getElementById('quizTopicSelect').value;
-    const difficulty = document.getElementById('quizDifficultySelect').value;
+    const difficulty = document.getElementById('quizDifficultySelect').value || 'medium';
     const count      = parseInt(document.getElementById('quizCountInput').value) || 5;
-    const topicLabel = topic ? `${moduleName} — ${topic}` : moduleName;
+
+    let topicLabel;
+
+    if (!QuizModal.modules.length) {
+        // Free-text fallback
+        const freetext = document.getElementById('quizFreetextInput')?.value?.trim();
+        if (!freetext) {
+            showToast('Please describe the topic you want to be quizzed on.', 'error');
+            return;
+        }
+        topicLabel = freetext;
+    } else {
+        const moduleIdx  = Number(document.getElementById('quizModuleSelect').value || 0);
+        const moduleName = QuizModal.modules[moduleIdx]?.module || subject;
+        const topic      = document.getElementById('quizTopicSelect').value?.trim();
+        // Build the most specific label possible
+        topicLabel = (topic && topic !== 'Any topic in this module')
+            ? `${moduleName} — ${topic}`
+            : moduleName;
+    }
+
     closeQuizModal();
     await generateQuiz(subject, topicLabel, difficulty, count);
 }
+
+function closeQuizModal() { document.getElementById('quizGenModal').classList.add('hidden'); }
 
 // ── QUIZ GENERATE ────────────────────────────────────────────────
 async function generateQuiz(subject, module, difficulty, questionCount) {

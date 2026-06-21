@@ -151,7 +151,22 @@ Subject: {subject}
 Topic (use exactly this scope, do not reinterpret it): {module}
 Difficulty: {difficulty}  |  Questions: {question_count}
 
-Return ONLY valid JSON — no markdown fences, no commentary:
+════════════════════════════════════════
+CRITICAL JSON AND MATHS FORMATTING RULES
+════════════════════════════════════════
+1. Return ONLY valid JSON — no markdown fences, no text before or after the JSON.
+2. Your response MUST start with {{ and end with }}.
+3. For mathematical expressions, use plain Unicode — NEVER LaTeX backslash commands:
+   - Greek letters:  θ  φ  π  α  β  γ  λ  μ  σ  Δ  Σ  (not \\theta, \\pi etc.)
+   - Superscripts:   x² x³  sin²(θ)  (not x^2 or \\sin^2)
+   - Square root:    √x  √(x+1)  (not \\sqrt{{x}})
+   - Fractions:      (x+1)/(x-1)  (not \\frac{{x+1}}{{x-1}})
+   - Trig functions: sin(θ)  cos(θ)  tan(θ)  (not \\sin \\cos \\tan)
+   - Integrals:      ∫  ∑  ∞  ≤  ≥  ≠  ±  ×  ÷  ∈  ⊂
+   Example: "sin²(θ) + cos²(θ) = 1" NOT "\\sin^2\\theta + \\cos^2\\theta = 1"
+   Backslashes inside JSON strings cause parse errors — avoid them entirely.
+
+Return ONLY valid JSON with this exact structure:
 {{
   "title": "Short quiz title",
   "subject": "{subject}",
@@ -160,7 +175,7 @@ Return ONLY valid JSON — no markdown fences, no commentary:
     {{
       "id": "q1",
       "type": "multiple_choice",
-      "question": "Question text here",
+      "question": "Question text (plain Unicode for any maths)",
       "marks": 1,
       "options": ["Option A", "Option B", "Option C", "Option D"],
       "answer": "Exact text of correct option",
@@ -169,7 +184,7 @@ Return ONLY valid JSON — no markdown fences, no commentary:
     {{
       "id": "q2",
       "type": "short_answer",
-      "question": "Question text here",
+      "question": "Question text",
       "marks": 3,
       "options": [],
       "answer": "Expected full-mark answer",
@@ -185,8 +200,7 @@ Rules:
 - Exactly one option must be unambiguously correct; the other three must be
   incorrect but realistic distractors.
 - Provide exactly {question_count} questions.
-
-YOUR RESPONSE MUST START WITH {{ AND END WITH }}. NO OTHER TEXT WHATSOEVER."""
+- All mathematical notation must use Unicode symbols only — no backslashes."""
 
 
 # ── FLASHCARDS ────────────────────────────────────────────────────

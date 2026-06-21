@@ -632,7 +632,8 @@
           showTaskStatus("Could not save task. Please try again.", "error");
         }
       });
-    
+    });
+
     const _taskBroadcast = typeof BroadcastChannel !== 'undefined'
       ? new BroadcastChannel('dusty_tasks')
       : null;
@@ -645,7 +646,6 @@
             }
         };
     }
-
-    });
+    
   })
 })();
