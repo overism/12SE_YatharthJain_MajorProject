@@ -59,6 +59,19 @@
         </nav>
     </sidebar>
 
+    <div class="page-loading" id="dashboard-loading">
+        <div class="page-loading-content">
+            <div class="page-loading-icon">
+                <img src="{{ url_for('static', filename='images/dashboard-icon.svg') }}" alt="Dashboard icon">
+            </div>
+            <h2 class="page-loading-title">Loading Dashboard</h2>
+            <p class="page-loading-subtitle">Fetching your all your necessities...</p>
+            <div class="page-loading-progress">
+                <div class="page-loading-progress-bar"></div>
+            </div>
+        </div>
+    </div>
+
     <div class="dash-container">
         <!-- HEADER -->
             <header class="dash-header">

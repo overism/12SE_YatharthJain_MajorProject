@@ -43,6 +43,10 @@ const MODE_LABELS = {
 
 // ── INIT ─────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
+    const loadingScreen = document.getElementById('chat-loading');
+    if (loadingScreen) {
+        loadingScreen.classList.remove('is-hidden');
+    }
     const userDataEl = document.getElementById('chatUserData');
     try { Chat.user = JSON.parse(userDataEl?.textContent || '{}') || {}; } catch { Chat.user = {}; }
 
@@ -88,13 +92,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     setMode('tutor');
     checkKB();
     await loadChatSessions();
+    await createNewChat();
 
-    // Auto-load most-recent chat or start fresh
-    if (Chat.sessions.length > 0) {
-        await loadChat(Chat.sessions[0].sessionID);
-    } else {
-        await createNewChat();
-    }
+    setTimeout(() => {
+        const loadingScreen = document.getElementById('chat-loading');
+        if (loadingScreen) {
+            loadingScreen.classList.add('is-hidden');
+        }
+    }, 500);
 });
 
 // ── MODE ─────────────────────────────────────────────────────────
@@ -543,14 +548,27 @@ function removeThinking() {
 function renderMD(raw) {
     if (!raw) return '<p>No response.</p>';
  
-    // ── Inline formatting applied to a single already-clean string ──
+    // ── HTML entity escape ────────────────────────────────────────
+    function esc(v) {
+        return String(v ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+ 
+    // ── Inline formatting (applied to content text, never to raw bullet prefix) ──
     function fmt(s) {
-        s = s.replace(/\*\*\*(.+?)\*\*\*/gs, '<strong><em>$1</em></strong>');
-        s = s.replace(/\*\*(.+?)\*\*/gs,     '<strong>$1</strong>');
-        // Italic: only match when * is NOT preceded by a space or newline
-        // (avoids treating "* bullet" as italic opener)
-        s = s.replace(/(?<!\s)\*(?!\s)(.+?)(?<!\s)\*(?!\s)/g, '<em>$1</em>');
-        s = s.replace(/`([^`]+)`/g,           '<code>$1</code>');
+        // Bold-italic must come before bold and italic
+        s = s.replace(/\*\*\*(?!\s)(.+?)(?<!\s)\*\*\*/g, '<strong><em>$1</em></strong>');
+        // Bold
+        s = s.replace(/\*\*(?!\s)(.+?)(?<!\s)\*\*/g, '<strong>$1</strong>');
+        // Italic — asterisk NOT followed by whitespace, content, closing asterisk NOT preceded by whitespace
+        // This correctly handles *word*, *two words*, *phrase with spaces* etc.
+        s = s.replace(/\*(?!\s)([^*\n]+?)(?<!\s)\*/g, '<em>$1</em>');
+        // Inline code
+        s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
+        // Dusty colour spans  [text]{colour}
         s = s.replace(
             /\[(.+?)\]\{(red|green|blue|orange|purple|yellow|teal|pink)\}/g,
             '<span class="chat-colour-$2">$1</span>'
@@ -558,35 +576,31 @@ function renderMD(raw) {
         return s;
     }
  
-    // ── Escape HTML entities ──
-    function esc(v) {
-        return String(v ?? '')
-            .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-            .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-    }
- 
+    // ── Escape then handle block-level headings and rules ─────────
     let s = esc(raw);
  
-    // ── Block-level elements that must be kept intact ──
-    s = s.replace(/^(#{1,3})\s+(.+)$/gm, (_, hashes, text) => {
-        const tag = `h${hashes.length}`;
-        return `<${tag}>${fmt(text)}</${tag}>`;
-    });
+    s = s.replace(/^######\s+(.+)$/gm, (_, t) => `<h3>${fmt(t)}</h3>`);
+    s = s.replace(/^#####\s+(.+)$/gm,  (_, t) => `<h3>${fmt(t)}</h3>`);
+    s = s.replace(/^####\s+(.+)$/gm,   (_, t) => `<h3>${fmt(t)}</h3>`);
+    s = s.replace(/^###\s+(.+)$/gm,    (_, t) => `<h3>${fmt(t)}</h3>`);
+    s = s.replace(/^##\s+(.+)$/gm,     (_, t) => `<h2>${fmt(t)}</h2>`);
+    s = s.replace(/^#\s+(.+)$/gm,      (_, t) => `<h1>${fmt(t)}</h1>`);
     s = s.replace(/^---$/gm, '<hr>');
  
-    // ── Split on blank lines → blocks ──
+    // ── Split on blank lines ──────────────────────────────────────
     const blocks = s.split(/\n{2,}/);
  
     const rendered = blocks.map(block => {
         block = block.trim();
         if (!block) return '';
  
-        // Already-converted heading / rule
-        if (/^<(h[123]|hr)/.test(block)) return block;
+        // Already-converted block-level element
+        if (/^<(h[1-6]|hr)/.test(block)) return block;
  
         const lines = block.split('\n').map(l => l.trim()).filter(Boolean);
  
-        // ── Detect list type at the RAW LINE level ────────────────
+        // ── Raw-line classifiers ─────────────────────────────────
+        // A bullet line starts with "- ", "* " (asterisk SPACE), or "• "
         const isBullet  = l => /^[-*•]\s/.test(l);
         const isOrdered = l => /^\d+\.\s/.test(l);
         const isQuote   = l => /^>\s/.test(l);
@@ -613,13 +627,13 @@ function renderMD(raw) {
             }</blockquote>`;
         }
  
-        // ── Mixed block: may have bullet lines and plain lines ─────
+        // ── Mixed block (bullets + plain prose in same paragraph) ─
         const hasMixedList = lines.some(isBullet) || lines.some(isOrdered);
  
         if (hasMixedList) {
-            let html  = '';
-            let inUL  = false;
-            let inOL  = false;
+            let html = '';
+            let inUL = false;
+            let inOL = false;
  
             lines.forEach(l => {
                 if (isBullet(l)) {
@@ -642,7 +656,7 @@ function renderMD(raw) {
             return html;
         }
  
-        // ── Plain paragraph ──────────────────────────────────────
+        // ── Plain paragraph ───────────────────────────────────────
         return `<p>${lines.map(fmt).join('<br>')}</p>`;
     });
  
@@ -706,27 +720,49 @@ function renderChatHistory() {
 }
 
 async function createNewChat() {
-    // Clear server-side session FIRST so old file context is gone
-    await fetch('/api/chat/clear-session', { method: 'POST' }).catch(() => {});
- 
-    try {
-        const data = await postJSON('/api/chat/session', {
-            title:   'Untitled Chat',
-            subject: 'General',
-            module:  'General',
-        });
-        Chat.sessionID           = data.sessionID;
-        Chat.quiz                = null;
-        Chat.activeQuizId        = null;
-        Chat.activeQuizMessageID = null;
-        attachedFile             = null;
-        removeAttachedFile();
-        EL.messages.innerHTML = '';
-        addMsg('assistant', 'New chat started. What would you like to study?');
-        await loadChatSessions();
-        showToast('New chat created', 'info');
-    } catch (err) {
-        showToast(err.message, 'error');
+    await fetch('/api/chat/clear-session', {
+        method: 'POST'
+    }).catch(() => {});
+
+    const res = await fetch('/api/chat/sessions');
+    if (!res.ok) return;
+
+    const seshes = await res.json();
+    Chat.sessions = seshes.sessions || [];
+
+    const hasUntitledChat = Chat.sessions.some(
+        sess => sess.title === 'Untitled Chat'
+    );
+
+    if (!hasUntitledChat) {
+        try {
+            const data = await postJSON('/api/chat/session', {
+                title: 'Untitled Chat',
+                subject: 'General',
+                module: 'General'
+            });
+
+            Chat.sessionID = data.sessionID;
+            Chat.quiz = null;
+            Chat.activeQuizId = null;
+            Chat.activeQuizMessageID = null;
+
+            attachedFile = null;
+            removeAttachedFile();
+
+            EL.messages.innerHTML = '';
+
+            addMsg(
+                'assistant',
+                'New chat started. What would you like to study?'
+            );
+
+            await loadChatSessions();
+
+            showToast('New chat created', 'info');
+        } catch (err) {
+            showToast(err.message, 'error');
+        }
     }
 }
 

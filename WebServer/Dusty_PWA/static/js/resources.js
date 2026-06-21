@@ -46,7 +46,21 @@ function resolveSubjectColour(subjectName) {
 }
 
 // ── INIT ────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', loadResources);
+document.addEventListener('DOMContentLoaded', async() => {
+    const loadingScreen = document.getElementById('resources-loading');
+    if (loadingScreen) {
+        loadingScreen.classList.remove('is-hidden');
+    }
+    
+    loadResources();
+
+    setTimeout(() => {
+        const loadingScreen = document.getElementById('resources-loading');
+        if (loadingScreen) {
+            loadingScreen.classList.add('is-hidden');
+        }
+    }, 2000);
+});
 
 async function loadResources() {
     try {

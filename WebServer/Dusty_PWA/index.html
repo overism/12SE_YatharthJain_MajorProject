@@ -24,15 +24,9 @@
 
     <div class="page-shell">
       <header class="topbar" role="banner">
-        <a class="brand" href="{{ url_for('home') }}" aria-label="Dusty home">
+        <a class="brand" href="{{ url_for('index') }}" aria-label="Dusty home">
           <img src="{{ url_for('static', filename='images/transp512.png') }}" alt="Dusty logo">
         </a>
-        <nav class="nav" role="navigation" aria-label="Auth pages">
-          <a class="btn btn-ghost" href="{{ url_for('home') }}">Home</a>
-          <a class="btn btn-ghost" href="{{ url_for('login') }}">Sign In</a>
-          <a class="btn btn-primary" href="{{ url_for('signup') }}">Sign Up</a>
-          <a class="btn btn-profile" href="{{ url_for('profile') }}">Profile</a>
-        </nav>
       </header>
 
       <main>
@@ -60,12 +54,12 @@
             </p>
             <div class="hero-actions">
               <a class="btn btn-primary" href="{{ url_for('signup') }}">Start Free</a>
-              <a class="btn btn-ghost" href="#feature-book">See the story</a>
+              <a class="btn btn-ghost" href="#feature-book-marker">See the story</a>
             </div>
             <ul class="hero-points" aria-label="Feature highlights">
               <li>Smart organisation for notes and study material</li>
               <li>Clear revision flow from setup to exam prep</li>
-              <li>Designed to reduce clutter and decision fatigue</li>
+              <li id="feature-book-marker">Designed to reduce clutter and decision fatigue</li>
             </ul>
           </div>
 
@@ -112,7 +106,7 @@
                 </div>
 
                 <div class="book-pages" id="book-pages">
-                  <article class="book-page page-one card-3d" data-tilt>
+                  <article class="book-page page-one">
                     <div class="page-content">
                       <p class="page-number">01</p>
                       <h3>Collect everything in one clean workspace.</h3>
@@ -123,7 +117,7 @@
                     </div>
                   </article>
 
-                  <article class="book-page page-two card-3d" data-tilt>
+                  <article class="book-page page-two">
                     <div class="page-content">
                       <p class="page-number">02</p>
                       <h3>See what matters now instead of everything at once.</h3>
@@ -134,7 +128,7 @@
                     </div>
                   </article>
 
-                  <article class="book-page page-three card-3d" data-tilt>
+                  <article class="book-page page-three">
                     <div class="page-content">
                       <p class="page-number">03</p>
                       <h3>Turn revision into a repeatable rhythm.</h3>
@@ -144,7 +138,7 @@
                     </div>
                   </article>
 
-                  <article class="book-page page-four card-3d" data-tilt>
+                  <article class="book-page page-four">
                     <div class="page-content">
                       <p class="page-number">04</p>
                       <h3>End on momentum, not overwhelm.</h3>
@@ -169,7 +163,6 @@
             </p>
             <div class="hero-actions">
               <a class="btn btn-primary" href="{{ url_for('signup') }}">Create Account</a>
-              <a class="btn btn-ghost" href="{{ url_for('login') }}">Sign In</a>
             </div>
           </div>
         </section>

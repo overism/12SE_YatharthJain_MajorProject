@@ -18,9 +18,21 @@ const DEFAULT_FLASHCARD_SUBJECTS = ['Software Engineering', 'English Advanced', 
 
 // ── INIT ──────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+    const loadingScreen = document.getElementById('flashcards-loading');
+    if (loadingScreen) {
+        loadingScreen.classList.remove('is-hidden');
+    }
+
     loadSubjects();
     loadDecksFromDB();   // persistent: pulls saved decks from the server
-    openModal();
+
+    setTimeout(() => {
+        const loadingScreen = document.getElementById('flashcards-loading');
+        if (loadingScreen) {
+            loadingScreen.classList.add('is-hidden');
+        }
+        openModal();
+    }, 500);
 });
 
 // ── SUBJECT LOADING ───────────────────────────────────────────────
@@ -217,11 +229,6 @@ function renderDeckGrid() {
     const grid = document.getElementById('deckGrid');
     if (!grid) return;
 
-    if (!FC.decks.length) {
-        grid.innerHTML = `<div class="empty-state"><div class="icon">🃏</div><p>No decks yet. Generate your first deck above or use the <strong>+ New Deck</strong> button.</p></div>`;
-        return;
-    }
-
     grid.innerHTML = FC.decks.map(deck => `
         <div class="deck-card" onclick='loadDeckById(${deck.id})'>
             <div class="deck-card-subject">${escHtml(deck.subject)}</div>
@@ -239,6 +246,14 @@ function renderDeckGrid() {
             </div>
         </div>
     `).join('');
+
+    if (!FC.decks.length) {
+        grid.innerHTML = `<div class="empty-state">
+                <div class="icon">🃏</div>
+                <p>No decks yet. Generate your first deck above.</p>
+            </div>`;
+        return;
+    }
 }
 
 function loadDeckById(id) {

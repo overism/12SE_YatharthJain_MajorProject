@@ -548,7 +548,6 @@ html {
     border: 2px solid #e1e5e9;
     border-radius: 12px;
     font-size: 16px;
-    transition: all 0.3s ease;
     background: rgba(255,255,255,0.8);
     backdrop-filter: blur(10px);
 }
@@ -557,8 +556,6 @@ html {
 .form-group textarea:focus {
     outline: none;
     border-color: #f5761c;
-    box-shadow: 0 0 0 3px rgba(245, 118, 28, 0.1);
-    transform: translateY(-2px);
 }
 
 .form-actions {

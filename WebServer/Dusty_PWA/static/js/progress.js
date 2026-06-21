@@ -38,7 +38,21 @@ function paletteColour(keyOrIndex) {
 
 let charts = {};
 
-document.addEventListener('DOMContentLoaded', loadProgress);
+document.addEventListener('DOMContentLoaded', async() => {
+    const loadingScreen = document.getElementById('progress-loading');
+    if (loadingScreen) {
+        loadingScreen.classList.remove('is-hidden');
+    }
+    
+    loadProgress();
+
+    setTimeout(() => {
+        const loadingScreen = document.getElementById('progress-loading');
+        if (loadingScreen) {
+            loadingScreen.classList.add('is-hidden');
+        }
+    }, 500);
+});
 
 const _progressChannel = typeof BroadcastChannel !== 'undefined'
     ? new BroadcastChannel('dusty_tasks') : null;

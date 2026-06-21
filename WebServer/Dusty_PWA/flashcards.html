@@ -26,7 +26,7 @@
 <div id="fcStatus" class="status"></div>
 
 <!-- ══ SUBJECT SELECTION MODAL ══ -->
-<div id="subjectModal" class="modal-overlay">
+<div id="subjectModal" class="modal-overlay hidden">
     <div class="modal-box">
         <h2 class="modal-title">Choose a Subject</h2>
         <p class="modal-sub">Select a subject to generate or browse flashcard decks.</p>
@@ -68,6 +68,19 @@
         <a class="btn btn-ghost" href="{{ url_for('resources') }}">Resources</a>
     </nav>
 </sidebar>
+
+<div class="page-loading" id="flashcards-loading">
+    <div class="page-loading-content">
+        <div class="page-loading-icon">
+            <img src="{{ url_for('static', filename='images/flashcards-icon.svg') }}" alt="Flashcards icon">
+        </div>
+        <h2 class="page-loading-title">Loading Flashcards</h2>
+        <p class="page-loading-subtitle">Fetching your flashcard decks...</p>
+        <div class="page-loading-progress">
+            <div class="page-loading-progress-bar"></div>
+        </div>
+    </div>
+</div>
 
 <div class="flashcards-container">
 
@@ -206,10 +219,7 @@
         <div class="deck-grid" id="deckGrid">
             <div class="empty-state">
                 <div class="icon">🃏</div>
-                <p>No decks yet. Generate your first deck above or use the <strong><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <line x1="12" y1="5" x2="12" y2="19"></line>
-                                <line x1="5" y1="12" x2="19" y2="12"></line>
-                            </svg> New Deck</strong> button.</p>
+                <p>No decks yet. Generate your first deck above.</p>
             </div>
         </div>
     </div>

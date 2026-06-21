@@ -37,6 +37,19 @@
     </nav>
 </sidebar>
 
+<div class="page-loading" id="resources-loading">
+    <div class="page-loading-content">
+        <div class="page-loading-icon">
+            <img src="{{ url_for('static', filename='images/resources-icon.svg') }}" alt="Resources icon">
+        </div>
+        <h2 class="page-loading-title">Loading Resources</h2>
+        <p class="page-loading-subtitle">Fetching uploads and resources...</p>
+        <div class="page-loading-progress">
+            <div class="page-loading-progress-bar"></div>
+        </div>
+    </div>
+</div>
+
 <div class="resources-container">
 
     <!-- Header -->

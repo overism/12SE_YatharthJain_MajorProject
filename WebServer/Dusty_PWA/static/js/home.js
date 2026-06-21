@@ -27,6 +27,11 @@ const _taskChannel = typeof BroadcastChannel !== 'undefined'
 
 /* ── BOOT ── */
 document.addEventListener('DOMContentLoaded', () => {
+    const loadingScreen = document.getElementById('dashboard-loading');
+    if (loadingScreen) {
+        loadingScreen.classList.remove('is-hidden');
+    }
+
     renderGreeting();
     loadDashboard();
     initSortable();
@@ -37,6 +42,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (_taskChannel) {
         _taskChannel.onmessage = () => loadDashboard();
     }
+
+    setTimeout(() => {
+        const loadingScreen = document.getElementById('dashboard-loading');
+        if (loadingScreen) {
+            loadingScreen.classList.add('is-hidden');
+        }
+    }, 500);
 });
 
 /* ── GREETING ── */

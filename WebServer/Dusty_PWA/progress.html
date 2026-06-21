@@ -38,6 +38,19 @@
     </nav>
 </sidebar>
 
+<div class="page-loading" id="progress-loading">
+    <div class="page-loading-content">
+        <div class="page-loading-icon">
+            <img src="{{ url_for('static', filename='images/progress-icon.svg') }}" alt="Progress icon">
+        </div>
+        <h2 class="page-loading-title">Loading Progress</h2>
+        <p class="page-loading-subtitle">Fetching your all your charts and progress data...</p>
+        <div class="page-loading-progress">
+            <div class="page-loading-progress-bar"></div>
+        </div>
+    </div>
+</div>
+
 <div class="progress-container">
     <div class="progress-header">
         <div>

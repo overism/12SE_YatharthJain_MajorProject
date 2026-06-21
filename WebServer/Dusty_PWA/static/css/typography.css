@@ -17,14 +17,157 @@
  * Save this file as:  WebServer/Dusty_PWA/static/css/typography.css
  */
 
-/* ── Base body typography (matches landing page feel) ── */
+/* ── Font family on html/body ONLY — no line-height here ─────────────── */
 html, body {
     font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+    font-size: 15px;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    font-size: 15px;
-    line-height: 1.6;
-    color: #22140b;
+    /* intentionally NO line-height — let layout elements keep "normal" */
+}
+
+/* ── Readable leading for prose elements only ─────────────────────────── */
+p, li, td, th, blockquote, figcaption, caption, dd, dt,
+.msg-bubble p,
+.msg-bubble li,
+.quiz-question-text,
+.quiz-fb-comment,
+.quiz-result-summary,
+.quiz-next-steps li,
+.upcoming-task .task-info span,
+.panel-card p,
+.form-hint,
+.modal-sub,
+.schedule-modal-subtitle,
+.prefs-sub,
+.upload-modal-sub {
+    line-height: 1.65;
+}
+
+/* Labels get slightly tighter leading — they're short strings */
+label {
+    line-height: 1.3;
+}
+
+/* Tighter leading for single-line UI text (badges, labels, nav) */
+button, .btn, input, select, textarea,
+.status-badge, .meta-badge, .lib-badge, .deck-card-count,
+.kb-status, .file-card-ext, .tree-file-ext,
+.sidebar .btn, .nav a {
+    line-height: 1.2;
+}
+
+/* ── Cooper BT for all display headings ─────────────────────────────── */
+h1, h2, h3, h4, h5, h6,
+.tasks-title,
+.calendar-title,
+.timer-title,
+.chat-title,
+.flashcards-title,
+.progress-title,
+.resources-title,
+.profile-title,
+.dash-title,
+.widget-title,
+.panel-title,
+.presets-title,
+.deck-area h2,
+.library-section h2,
+.subject-title,
+.modal-title,
+.task-form-title,
+.quiz-gen-title,
+.event-title,
+.schedule-modal-title,
+.session-complete h3,
+.prefs-heading {
+    font-family: 'Cooper BT', Georgia, 'Times New Roman', serif;
+    letter-spacing: -0.01em;
+    line-height: 1.1;
+}
+
+/* ── Page-title gradient (consistent across all app pages) ───────────── */
+.tasks-title,
+.calendar-title,
+.timer-title,
+.chat-title,
+.flashcards-title,
+.progress-title,
+.resources-title,
+.profile-title,
+.dash-title {
+    font-size: clamp(1.75rem, 3.5vw, 2.2rem);
+    font-weight: 700;
+    background: linear-gradient(90deg, #f5761c, #ee4319);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+/* ── Metric / stat display values ────────────────────────────────────── */
+.metric-value,
+.stat-card-val,
+.quiz-score-big,
+.pile-count,
+.result-tile strong {
+    font-family: 'Cooper BT', Georgia, serif;
+    line-height: 1;
+}
+
+/* ── Timer uses monospace ─────────────────────────────────────────────── */
+.timer-display,
+#dashTimerDisplay {
+    font-family: 'Roboto Mono', 'Courier New', monospace;
+    line-height: 1;
+}
+
+/* ── All form controls ────────────────────────────────────────────────── */
+input, select, textarea, button {
+    font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+}
+
+/* ── Sidebar nav ─────────────────────────────────────────────────────── */
+.sidebar .btn {
+    font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+    font-weight: 700;
+    font-size: 14px;
+}
+
+/* ── Overline / eyebrow labels ───────────────────────────────────────── */
+.ctrl-label,
+.form-label,
+.schedule-pref-label,
+.quick-label,
+.card-face-label,
+.tree-sidebar-header h3,
+.chat-history-header h3,
+.prefs-section-label {
+    font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-size: 10.5px;
+    line-height: 1.2;
+}
+
+/* ── Data table cells ────────────────────────────────────────────────── */
+.sessions-table th,
+.sessions-table td {
+    font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+    line-height: 1.4;
+}
+
+/* ── Smooth rendering everywhere ─────────────────────────────────────── */
+* {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Placeholder text ────────────────────────────────────────────────── */
+::placeholder {
+    font-family: 'Roboto', 'Segoe UI', Arial, sans-serif;
+    font-weight: 400;
+    opacity: 0.55;
 }
 
 /* ── Cooper BT for all display headings ── */

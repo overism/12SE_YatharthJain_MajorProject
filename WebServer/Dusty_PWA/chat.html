@@ -47,6 +47,19 @@
     </nav>
 </sidebar>
 
+<div class="page-loading" id="chat-loading">
+    <div class="page-loading-content">
+        <div class="page-loading-icon">
+            <img src="{{ url_for('static', filename='images/chat-icon.svg') }}" alt="Chat icon">
+        </div>
+        <h2 class="page-loading-title">Loading DustyAI</h2>
+        <p class="page-loading-subtitle">Fetching your all your chats...</p>
+        <div class="page-loading-progress">
+            <div class="page-loading-progress-bar"></div>
+        </div>
+    </div>
+</div>
+
 <!-- ══ PAGE SHELL ══ -->
 <div class="chat-container">
 
