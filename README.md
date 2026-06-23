@@ -27,11 +27,11 @@ Before running the application, ensure the following software is installed:
 
 ### Required Software
 
-* Python 3.11 or newer
 * Git
+* Python 3.11 or newer
+* Visual Studio Code
 * Google Chrome, Microsoft Edge, Firefox, or another modern browser
 * Google API credentials (for Calendar sync) - see setup below
-* Visual Studio Code
 
 ### Recommended Hardware
 
@@ -47,7 +47,7 @@ Before running the application, ensure the following software is installed:
 Open Command Prompt, PowerShell, or Terminal and run:
 
 ```bash
-git clone [<repository-url>](https://github.com/overism/12SE_YatharthJain_MajorProject)
+git clone https://github.com/overism/12SE_YatharthJain_MajorProject
 cd 12SE_YatharthJain_MajorProject
 ```
 
