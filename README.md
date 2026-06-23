@@ -29,7 +29,7 @@ Before running the application, ensure the following software is installed:
 
 * Git
 * Python 3.11 or newer
-* Visual Studio Code
+* Visual Studio Code (optional for running and debugging locally)
 * Google Chrome, Microsoft Edge, Firefox, or another modern browser
 * Google API credentials (for Calendar sync) - see setup below
 
@@ -39,6 +39,9 @@ Before running the application, ensure the following software is installed:
 * Internet connection (required for AI functionality)
 
 ---
+
+# End User License Agreement (EULA)
+Please see to the user agreement before proceeding: [EULA.md](https://github.com/overism/12SE_YatharthJain_MajorProject/blob/main/EULA.md)
 
 # Installation
 
@@ -120,6 +123,28 @@ pip install google-generativeai
 
 ---
 
+## Missing Dependencies
+
+If Python reports:
+
+```text
+ModuleNotFoundError
+```
+
+install the missing package:
+
+```bash
+pip install package-name
+```
+
+or reinstall all requirements:
+
+```bash
+pip install -r requirements.txt
+```
+
+---
+
 ## 5. Environment Variables Setup
 Locate portfolio and follow insturctions for environment variable and database set up 
 
@@ -194,7 +219,19 @@ The login page should load automatically.
 
 # Features
 
-## 1. Study Scheduler
+## 1. Dashboard
+
+The home dashboard provides:
+
+* Quick overview of upcoming tasks
+* Days remaining countdown
+* Subject-wise task distribution
+* Quick access to all features
+* Progress monitoring widgets
+
+---
+
+## 2. Study Scheduler
 
 The intelligent study scheduler is the core feature of Dusty AI:
 
@@ -223,16 +260,6 @@ The intelligent study scheduler is the core feature of Dusty AI:
 
 ---
 
-## 2. Task Management
-
-* Create tasks with title, subject, due date, and type
-* Task types: Homework, Exam, Project, Study, Assignment, Other
-* Track progress (0-100%)
-* View days remaining until due
-* Link tasks to calendar events automatically
-
----
-
 ## 3. Subject Management
 
 * Add unlimited subjects with custom colours
@@ -242,7 +269,17 @@ The intelligent study scheduler is the core feature of Dusty AI:
 
 ---
 
-## 4. AI Assistance (Chat)
+## 4. Task Management
+
+* Create tasks with title, subject, due date, and type
+* Task types: Homework, Exam, Project, Study, Assignment, Other
+* Track progress (0-100%)
+* View days remaining until due
+* Link tasks to calendar events automatically
+
+---
+
+## 5. AI Assistance (Chat)
 
 The AI chat provides:
 
@@ -260,7 +297,7 @@ The AI chat provides:
 
 ---
 
-## 5. Flashcards
+## 6. Flashcards
 
 Create and study flashcards:
 
@@ -271,7 +308,7 @@ Create and study flashcards:
 
 ---
 
-## 6. Study Timer
+## 7. Study Timer
 
 Customisable Pomodoro-style timer:
 
@@ -285,7 +322,7 @@ Customisable Pomodoro-style timer:
 
 ---
 
-## 7. Progress Tracking
+## 8. Progress Tracking
 
 * View study analytics and statistics
 * Track completed sessions
@@ -295,7 +332,7 @@ Customisable Pomodoro-style timer:
 
 ---
 
-## 8. Resources Management
+## 9. Resources Management
 
 * Upload study materials (PDF, DOCX, PPTX, TXT, images)
 * Organise resources by subject
@@ -304,7 +341,7 @@ Customisable Pomodoro-style timer:
 
 ---
 
-## 9. Google Calendar Integration
+## 10. Google Calendar Integration
 
 Sync your study schedule with Google Calendar:
 
@@ -317,7 +354,7 @@ Sync your study schedule with Google Calendar:
 
 ---
 
-## 10. Profile & Settings
+## 11. Profile & Settings
 
 * Update username and email
 * Upload profile avatar
@@ -326,40 +363,6 @@ Sync your study schedule with Google Calendar:
 * Delete account
 * Theme customisation (light/dark)
 * Export/manage data
-
----
-
-# Dashboard
-
-The home dashboard provides:
-
-* Quick overview of upcoming tasks
-* Days remaining countdown
-* Subject-wise task distribution
-* Quick access to all features
-* Progress monitoring widgets
-
----
-
-# Missing Dependencies
-
-If Python reports:
-
-```text
-ModuleNotFoundError
-```
-
-install the missing package:
-
-```bash
-pip install package-name
-```
-
-or reinstall all requirements:
-
-```bash
-pip install -r requirements.txt
-```
 
 ---
 
