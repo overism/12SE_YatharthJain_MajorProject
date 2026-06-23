@@ -141,18 +141,6 @@ vite.config.ts.timestamp-*
 #secrets
 secrets/
 
-#database
-Chat_Database/
-data/
-
-.codex_tmp_task_save_check/
-
-WebServer/Dusty_PWA/dusty.db
-
-*.db
-
-odysseus/
-
 graphify-out/
 
 .sixth/
@@ -160,3 +148,7 @@ graphify-out/
 .claude/
 
 CLAUDE.md
+
+Chat_Database
+
+chroma_db

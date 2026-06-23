@@ -109,20 +109,8 @@ def calculate_free_time_windows(
     end_date: datetime,
     user_preferences: dict
 ) -> List[Dict]:
-    """
-    Calculate all free time windows between start_date and end_date.
-
-    A free time window is:
-    - Not occupied by existing calendar events
-    - Not occupied by existing generated study sessions
-    - Within reasonable study hours
-    - Respecting sleep times
-
-    Returns list of free slots with start/end times.
-    """
     print(f"[SCHEDULER] Calculating free windows from {start_date} to {end_date}")
 
-    # Get user preferences
     study_start = user_preferences.get('study_start', 6)
     study_end = user_preferences.get('study_end', 22)
     sleep_start = user_preferences.get('sleep_start', 22)
@@ -134,7 +122,6 @@ def calculate_free_time_windows(
     print(f"[SCHEDULER] Sleep hours: {sleep_start}:00 - {sleep_end}:00")
     print(f"[SCHEDULER] School hours: {school_start}:00 - {school_end}:00")
 
-    # Get existing events in the date range
     existing_events = []
     try:
         rows = conn.execute("""
@@ -152,7 +139,6 @@ def calculate_free_time_windows(
                 start = parse_calendar_dt(row['startTime'])
                 end = parse_calendar_dt(row['endTime'])
                 if start and end:
-                    # Strip timezone to keep consistent with naive local datetimes
                     if start.tzinfo is not None:
                         start = start.replace(tzinfo=None)
                     if end.tzinfo is not None:
@@ -766,20 +752,6 @@ def generate_smart_schedule_with_gemini(
     user_preferences: dict,
     options: dict
 ) -> dict:
-    """
-    Use Gemini to intelligently analyze user needs and generate a study schedule.
-
-    This is the main entry point for schedule generation.
-
-    Args:
-        user_prompt: Natural language description from user
-        user_data: Dict with tasks, exams, events, subjects, free_slots from collect_user_data()
-        user_preferences: User preferences (study hours, etc.)
-        options: Scheduling options
-
-    Returns:
-        dict with 'sessions', 'summary', and 'reasoning'
-    """
     print(f"\n{'='*60}")
     print(f"[GEMINI_SCHEDULE] Starting Gemini-powered schedule generation")
     print(f"{'='*60}")
@@ -916,19 +888,6 @@ def allocate_sessions_to_slots(
     user_preferences: Dict,
     options: Dict,
 ) -> List[Dict]:
-    """
-    Allocate Gemini-generated study sessions to free calendar slots.
- 
-    Fixes applied
-    -------------
-    * Skip any slot whose start is before *now* (prevents past events).
-    * Skip any session whose deadline has already passed.
-    * Consume each slot window exclusively — no two subjects share the
-      same 30-minute block.  A slot is split into sub-slots on every
-      allocation so subsequent sessions land in truly free time.
-    * Sessions are sorted by urgency (nearest deadline first) before
-      allocation, so the most important tasks always get slots.
-    """
     now = datetime.now()
  
     free_slots = sorted(
@@ -940,7 +899,6 @@ def allocate_sessions_to_slots(
                 "quality": slot.get("quality", 50),
             }
             for slot in user_data.get("free_slots", [])
-            # ── FIX 1: ignore slots that have already started ──
             if slot["start"] > now
         ],
         key=lambda s: s["start"],
@@ -948,7 +906,6 @@ def allocate_sessions_to_slots(
  
     subject_colour_map = user_data.get("subject_colour_map", {})
  
-    # ── FIX 2: urgency sort (nearest deadline first) ──────────────
     def _session_priority(session: Dict):
         dl = _deadline_dt(session, user_data)
         return dl if dl else datetime.max
@@ -960,7 +917,6 @@ def allocate_sessions_to_slots(
     sessions_data = sorted(sessions_data, key=_session_priority)
  
     allocated: List[Dict] = []
-    # working copy: list of (start, end) pairs still available
     free_windows: List[Dict] = list(free_slots)
  
     for session in sessions_data:
@@ -975,7 +931,6 @@ def allocate_sessions_to_slots(
  
         deadline_dt = _deadline_dt(session, user_data)
  
-        # ── FIX 3: skip sessions whose deadline is already past ───
         if deadline_dt and deadline_dt <= now:
             print(f"[ALLOCATOR] Skipping '{title}' — deadline already passed ({deadline_dt.date()})")
             continue
@@ -984,14 +939,12 @@ def allocate_sessions_to_slots(
             subject_name.lower(), DEFAULT_COLORS["default"]
         )
  
-        # Preferred date hint from Gemini
         preferred_date = _norm_date(session.get("suggested_date"))
  
         found_window = None
         scheduled_start = None
         scheduled_end   = None
  
-        # ── PASS 1: honour Gemini's suggested date ────────────────
         for win in free_windows:
             if win["start"] <= now:
                 continue
@@ -1007,7 +960,6 @@ def allocate_sessions_to_slots(
             scheduled_end   = candidate_end
             break
  
-        # ── PASS 2: earliest available window ────────────────────
         if not found_window:
             for win in free_windows:
                 if win["start"] <= now:
@@ -1026,8 +978,6 @@ def allocate_sessions_to_slots(
             print(f"[ALLOCATOR] No valid slot for: {title}")
             continue
  
-        # ── FIX 4: split the window, leaving remainder available ──
-        # Remove the consumed window and re-insert whatever is left.
         free_windows.remove(found_window)
         remainder_start    = scheduled_end
         remainder_duration = int(
@@ -1040,7 +990,6 @@ def allocate_sessions_to_slots(
                 "duration_minutes": remainder_duration,
                 "quality":          found_window.get("quality", 50),
             })
-            # Keep list sorted chronologically
             free_windows.sort(key=lambda w: w["start"])
  
         description = f"Strategy: {strategy}"

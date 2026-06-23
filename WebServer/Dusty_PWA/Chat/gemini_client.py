@@ -64,7 +64,6 @@ def _get_client() -> tuple[str, object]:
 
 
 def _call_with_retry(fn, *args, **kwargs):
-    """Call fn(*args, **kwargs) up to MAX_RETRIES times on transient errors."""
     delay = RETRY_DELAY_S
     last_exc: Exception | None = None
 
@@ -74,7 +73,6 @@ def _call_with_retry(fn, *args, **kwargs):
         except Exception as exc:
             last_exc = exc
             msg = str(exc).lower()
-            # Only retry on rate-limit / timeout / server errors
             transient = any(k in msg for k in (
                 "429", "500", "503", "timeout", "rate", "quota",
                 "resource_exhausted", "unavailable",
@@ -222,11 +220,8 @@ def _fix_latex_backslashes(text: str) -> str:
 
 
 def _parse_json(text: str) -> dict | list:
-    """Strip markdown fences and parse JSON. Raises RuntimeError on failure."""
     cleaned = text.strip()
 
-    # Strip opening fence from the VERY START only (not every line — avoid
-    # corrupting question text that legitimately starts with backticks)
     if cleaned.startswith('```'):
         first_newline = cleaned.find('\n')
         if first_newline != -1:
@@ -236,7 +231,6 @@ def _parse_json(text: str) -> dict | list:
             if cleaned.lower().startswith('json'):
                 cleaned = cleaned[4:].strip()
 
-    # Strip closing fence from the VERY END only
     if cleaned.endswith('```'):
         last_fence = cleaned.rfind('\n```')
         if last_fence != -1:
@@ -244,25 +238,21 @@ def _parse_json(text: str) -> dict | list:
         else:
             cleaned = cleaned[:-3].strip()
 
-    # Some models prefix with 'json\n' after stripping
     if cleaned.lower().startswith('json\n'):
         cleaned = cleaned[5:].strip()
 
-    # 1. Direct parse
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError:
         pass
 
-    # 2. Fix LaTeX / unescaped backslashes (common in maths quizzes)
     latex_fixed = _fix_latex_backslashes(cleaned)
     if latex_fixed != cleaned:
         try:
             return json.loads(latex_fixed)
         except json.JSONDecodeError:
-            cleaned = latex_fixed   # carry fixed version forward
+            cleaned = latex_fixed
 
-    # 3. Extract first balanced JSON object or array
     extracted = _extract_balanced_json(cleaned)
     if extracted:
         try:
@@ -270,7 +260,6 @@ def _parse_json(text: str) -> dict | list:
         except json.JSONDecodeError:
             pass
 
-    # 4. Minor structural repairs
     repaired = _repair_json_text(cleaned)
     if repaired != cleaned:
         try:

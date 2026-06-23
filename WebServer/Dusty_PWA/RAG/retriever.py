@@ -39,12 +39,6 @@ def retrieve(
     subject:  str | None = None,
     n_results: int = 5,
 ) -> list[dict]:
-    """
-    Retrieve the top-N relevant chunks for a question.
-
-    Always returns a list (empty on failure) — never raises,
-    so callers can always fall back to general knowledge.
-    """
     try:
         model      = get_model()
         collection = get_or_create_collection()

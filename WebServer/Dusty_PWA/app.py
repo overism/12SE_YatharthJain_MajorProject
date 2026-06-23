@@ -352,7 +352,7 @@ def login_validation():
         'SELECT userID, userName, userPassword, userSettings FROM users WHERE userEmail = ?',
         (email,)
     ).fetchone()
-    conn.close()  # only once
+    conn.close()
 
     authenticated = False
     if user:
@@ -1001,7 +1001,6 @@ def auth_google():
         prompt='consent'
     )
 
-    # STORE STATE + PKCE VERIFIER
     session['google_oauth_state'] = state
     session['google_code_verifier'] = flow.code_verifier
 
@@ -1241,7 +1240,6 @@ def get_tasks():
         """, (user_id,)).fetchall()
         conn.close()
         
-        # Format tasks for the frontend
         formatted_tasks = []
         for task in tasks:
             formatted_tasks.append({
@@ -1494,8 +1492,6 @@ def save_bio():
         traceback.print_exc()
         return jsonify({'error': 'Could not save bio.'}), 500
 
-
-
 @app.route('/offline.html')
 def offline():
     return render_template('offline.html')
@@ -1505,41 +1501,11 @@ def add_pwa_headers(response):
     response.headers['Service-Worker-Allowed'] = '/'
     return response
 
-#@app.route('/api/games', methods=['GET'])
-#def get_games():
-    try:
-        conn = get_db_connection()
-        c = conn.cursor()
-        c.execute("SELECT * FROM games LIMIT 50")
-        rows = [dict(r) for r in c.fetchall()]
-        conn.close()
-        return jsonify(rows)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-#@app.route('/api/debug/games')
-#def debug_games():
-    try:
-        connection = get_db_connection()
-        cursor = connection.cursor()
-        cursor.execute("SELECT * FROM games LIMIT 10")
-        rows = [dict(r) for r in cursor.fetchall()]
-        connection.close()
-        return jsonify({
-            'sample_count': len(rows),
-            'sample_games': rows,
-            'columns': list(rows[0].keys()) if rows else []
-        })
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
 @app.route('/api/schema')
 def api_schema():
-#    """Return the actual games table schema."""
     try:
         conn = get_db_connection()
         cursor = conn.cursor()
-#        cursor.execute("PRAGMA table_info(games)")
         cols = [{'name': r['name'], 'type': r['type']} for r in cursor.fetchall()]
         conn.close()
         return jsonify({'columns': cols})
