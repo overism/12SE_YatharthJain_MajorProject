@@ -88,17 +88,21 @@ source .venv/bin/activate
 You should now see:
 
 ```text
-(.venv)
+(.venv) #at the beginning of your terminal prompt.
 ```
-
-at the beginning of your terminal prompt.
 
 ---
 
-## 4. Install Required Packages
+## 4. Install Required Packages (estimated install time: 5-10 minutes)
 
 Install all project dependencies:
 
+Run the following command:
+```text
+cd WebServer\Dusty_PWA
+```
+
+Then:
 ```bash
 pip install -r requirements.txt
 ```
@@ -117,6 +121,7 @@ pip install google-generativeai
 ---
 
 ## 5. Environment Variables Setup
+Locate portfolio and follow insturctions for environment variable and database set up 
 
 Create a `.env` file in the `WebServer/Dusty_PWA` directory with the following variables:
 
