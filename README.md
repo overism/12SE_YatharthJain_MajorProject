@@ -262,7 +262,7 @@ The intelligent study scheduler is the core feature of Dusty AI:
 
 ## 3. Subject Management
 
-* Add unlimited subjects with custom colours
+* Add limited HSC subjects with custom colours
 * Colour options: orange, blue, green, red, purple, yellow, brown, amber, teal, pink
 * Set priority subjects for focused study
 * Customise study preferences per subject
