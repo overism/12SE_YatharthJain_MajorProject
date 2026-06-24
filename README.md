@@ -361,8 +361,6 @@ Sync your study schedule with Google Calendar:
 * Set bio
 * Change password
 * Delete account
-* Theme customisation (light/dark)
-* Export/manage data
 
 ---
 
@@ -378,9 +376,10 @@ Sync your study schedule with Google Calendar:
 
 ### Frontend
 * **HTML5** - Structure
-* **CSS3** - Styling with CustomTkinter-inspired design
+* **CSS3** - Styling with modern design
 * **JavaScript** - Interactivity
 * **FullCalendar** - Calendar visualization
+* **AG-Grid** - Clean and optimised tables
 * **PWA** - Progressive Web App capabilities
 
 ---
@@ -394,19 +393,6 @@ Year 12 Software Engineering Major Project
 Girraween High School
 
 2026
-
----
-
-# Acknowledgements
-
-* Python
-* Flask
-* SQLite
-* Google Gemini API
-* Google Calendar API
-* ChromaDB
-* HTML, CSS, and JavaScript
-* FullCalendar
 
 ---
 
